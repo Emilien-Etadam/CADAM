@@ -20,9 +20,13 @@ const PARAMETRIC_TOKEN_COST = 5;
 
 initSentry();
 
-// OpenRouter API configuration
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY') ?? '';
+// OpenAI-compatible (vLLM) API
+const OPENAI_BASE_URL = (
+  Deno.env.get('OPENAI_BASE_URL') ?? 'http://192.168.30.121:8000/v1'
+).replace(/\/$/, '');
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? 'changeme';
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? '/model';
+const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 
 // Helper to stream updated assistant message rows.
 // Silently noop if the controller is already closed (e.g. the client
@@ -175,10 +179,10 @@ interface OpenAIMessage {
   }>;
 }
 
-interface OpenRouterRequest {
+interface ChatCompletionsRequest {
   model: string;
   messages: OpenAIMessage[];
-  tools?: unknown[]; // OpenRouter/OpenAI tool definition
+  tools?: unknown[];
   stream?: boolean;
   max_tokens?: number;
   reasoning?: {
@@ -198,16 +202,14 @@ async function generateTitleFromMessages(
 - No quotes or special formatting
 - Examples: "Coffee Mug", "Gear Assembly", "Phone Stand"`;
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(CHAT_COMPLETIONS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://adam-cad.com',
-        'X-Title': 'Adam CAD',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-haiku-4.5',
+        model: OPENAI_MODEL,
         max_tokens: 30,
         messages: [
           { role: 'system', content: titleSystemPrompt },
@@ -221,7 +223,7 @@ async function generateTitleFromMessages(
     });
 
     if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.statusText}`);
+      throw new Error(`Chat completions error: ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -619,8 +621,8 @@ Deno.serve(async (req) => {
     );
 
     // Prepare request body
-    const requestBody: OpenRouterRequest = {
-      model,
+    const requestBody: ChatCompletionsRequest = {
+      model: OPENAI_MODEL,
       messages: [
         { role: 'system', content: PARAMETRIC_AGENT_PROMPT },
         ...messagesToSend,
@@ -630,8 +632,7 @@ Deno.serve(async (req) => {
       max_tokens: 16000,
     };
 
-    // Add reasoning/thinking parameter if requested and supported
-    // OpenRouter uses a unified 'reasoning' parameter
+    // Add reasoning/thinking parameter if requested (server may ignore if unsupported)
     if (thinking) {
       requestBody.reasoning = {
         max_tokens: 12000,
@@ -640,22 +641,22 @@ Deno.serve(async (req) => {
       requestBody.max_tokens = 20000;
     }
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(CHAT_COMPLETIONS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://adam-cad.com',
-        'X-Title': 'Adam CAD',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`OpenRouter API Error: ${response.status} - ${errorText}`);
+      console.error(
+        `Chat completions error: ${response.status} - ${errorText}`,
+      );
       throw new Error(
-        `OpenRouter API error: ${response.statusText} (${response.status})`,
+        `Chat completions error: ${response.statusText} (${response.status})`,
       );
     }
 
@@ -728,10 +729,10 @@ Deno.serve(async (req) => {
               // Surface API errors so the outer catch can mark tools as errored
               // — never swallow them in the parse-tolerance block above.
               if (chunk.error) {
-                console.error('OpenRouter stream error:', chunk.error);
+                console.error('Chat completions stream error:', chunk.error);
                 throw new Error(
                   chunk.error.message ||
-                    `OpenRouter error: ${JSON.stringify(chunk.error)}`,
+                    `Stream error: ${JSON.stringify(chunk.error)}`,
                 );
               }
 
@@ -966,8 +967,8 @@ Deno.serve(async (req) => {
             ];
 
             // Code generation request logic (SSE streaming)
-            const codeRequestBody: OpenRouterRequest = {
-              model,
+            const codeRequestBody: ChatCompletionsRequest = {
+              model: OPENAI_MODEL,
               messages: [
                 { role: 'system', content: STRICT_CODE_PROMPT },
                 ...codeMessages,
@@ -998,13 +999,11 @@ Deno.serve(async (req) => {
             };
 
             try {
-              const codeResponse = await fetch(OPENROUTER_API_URL, {
+              const codeResponse = await fetch(CHAT_COMPLETIONS_URL, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                  'HTTP-Referer': 'https://adam-cad.com',
-                  'X-Title': 'Adam CAD',
+                  Authorization: `Bearer ${OPENAI_API_KEY}`,
                 },
                 body: JSON.stringify(codeRequestBody),
               });
@@ -1037,7 +1036,7 @@ Deno.serve(async (req) => {
                 codeBuffer = codeLines.pop() || '';
 
                 for (const line of codeLines) {
-                  // Skip empty lines, SSE comments (`: OPENROUTER PROCESSING`),
+                  // Skip empty lines, SSE comments, and non-`data:` events
                   // and anything that isn't a `data:` event.
                   if (!line.startsWith('data: ')) continue;
                   const data = line.slice(6);
@@ -1062,7 +1061,7 @@ Deno.serve(async (req) => {
                   if (chunk.error) {
                     throw new Error(
                       chunk.error.message ||
-                        `OpenRouter error: ${JSON.stringify(chunk.error)}`,
+                        `Stream error: ${JSON.stringify(chunk.error)}`,
                     );
                   }
 

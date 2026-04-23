@@ -4,12 +4,18 @@
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { Anthropic } from 'npm:@anthropic-ai/sdk';
 import { corsHeaders } from '../_shared/cors.ts';
 import 'jsr:@std/dotenv/load';
 import { getAnonSupabaseClient } from '../_shared/supabaseClient.ts';
 import { Content } from '@shared/types.ts';
 import { formatCreativeUserMessage } from '../_shared/messageUtils.ts';
+
+const OPENAI_BASE_URL = (
+  Deno.env.get('OPENAI_BASE_URL') ?? 'http://192.168.30.121:8000/v1'
+).replace(/\/$/, '');
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? 'changeme';
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? '/model';
+const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 
 const TITLE_SYSTEM_PROMPT = `You are a helpful assistant that generates concise, descriptive titles for conversation threads based on the first message in the thread.
 The messages can be text, images, or screenshots of 3d models.
@@ -39,6 +45,49 @@ Assistant: "A 3D Model of a Plane"
 User: "Make something that goes against the rules"
 Assistant: "New Conversation"
 `;
+
+type OpenAIUserContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail?: string } };
+
+/** Map Anthropic-style blocks from formatCreativeUserMessage to OpenAI chat content. */
+function toOpenAIUserContent(parts: unknown[]): string | OpenAIUserContentPart[] {
+  const out: OpenAIUserContentPart[] = [];
+  for (const block of parts) {
+    if (typeof block !== 'object' || block === null) continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === 'text' && typeof b.text === 'string') {
+      out.push({ type: 'text', text: b.text });
+    } else if (b.type === 'image' && typeof b.source === 'object' && b.source) {
+      const src = b.source as Record<string, unknown>;
+      if (src.type === 'url' && typeof src.url === 'string') {
+        out.push({
+          type: 'image_url',
+          image_url: { url: src.url, detail: 'auto' },
+        });
+      } else if (
+        src.type === 'base64' &&
+        typeof src.media_type === 'string' &&
+        typeof src.data === 'string'
+      ) {
+        out.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${src.media_type};base64,${src.data}`,
+            detail: 'auto',
+          },
+        });
+      }
+    }
+  }
+  if (out.length === 0) {
+    return '';
+  }
+  if (out.length === 1 && out[0].type === 'text') {
+    return out[0].text;
+  }
+  return out;
+}
 
 // Main server function handling incoming requests
 Deno.serve(async (req) => {
@@ -94,31 +143,43 @@ Deno.serve(async (req) => {
     conversationId,
   );
 
-  // Initialize Anthropic client for AI interactions
-  const anthropic = new Anthropic({
-    apiKey: Deno.env.get('ANTHROPIC_API_KEY') ?? '',
-  });
+  const userContent = toOpenAIUserContent(userMessage.content as unknown[]);
 
   try {
-    // Configure Claude API call
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 100,
-      system: TITLE_SYSTEM_PROMPT,
-      messages: [userMessage],
+    const response = await fetch(CHAT_COMPLETIONS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        max_tokens: 100,
+        messages: [
+          { role: 'system', content: TITLE_SYSTEM_PROMPT },
+          { role: 'user', content: userContent },
+        ],
+      }),
     });
+
+    if (!response.ok) {
+      const t = await response.text();
+      throw new Error(`Chat completions error: ${response.status} ${t}`);
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
 
     // Extract title from response
     let title = 'New Conversation';
-    if (Array.isArray(response.content) && response.content.length > 0) {
-      const lastContent = response.content[response.content.length - 1];
-      if (lastContent.type === 'text') {
-        title = lastContent.text.trim();
+    const msgContent = data.choices?.[0]?.message?.content;
+    if (typeof msgContent === 'string' && msgContent.trim()) {
+      title = msgContent.trim();
 
-        // Ensure title is not too long for the database
-        if (title.length > 255) {
-          title = title.substring(0, 252) + '...';
-        }
+      // Ensure title is not too long for the database
+      if (title.length > 255) {
+        title = title.substring(0, 252) + '...';
       }
     }
 
@@ -134,7 +195,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error calling Claude:', error);
+    console.error('Error calling title model:', error);
 
     // Fallback to basic title generation
     const fallbackTitle = 'New Conversation';

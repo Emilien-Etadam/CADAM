@@ -4,10 +4,16 @@
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { Anthropic } from 'npm:@anthropic-ai/sdk';
 import { corsHeaders } from '../_shared/cors.ts';
 import 'jsr:@std/dotenv/load';
 import { getAnonSupabaseClient } from '../_shared/supabaseClient.ts';
+
+const OPENAI_BASE_URL = (
+  Deno.env.get('OPENAI_BASE_URL') ?? 'http://192.168.30.121:8000/v1'
+).replace(/\/$/, '');
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? 'changeme';
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? '/model';
+const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 
 const PROMPT_SYSTEM_PROMPT = `You are a helpful assistant that generates creative prompts for organic 3D forms and artistic objects. Your prompts should be:
 1. Focus on organic shapes, characters, figurines, and artistic forms
@@ -104,11 +110,6 @@ Deno.serve(async (req) => {
     .json()
     .catch(() => ({}));
 
-  // Initialize Anthropic client for AI interactions
-  const anthropic = new Anthropic({
-    apiKey: Deno.env.get('ANTHROPIC_API_KEY') ?? '',
-  });
-
   try {
     let systemPrompt: string;
     let userPrompt: string;
@@ -164,26 +165,36 @@ Return only the enhanced prompt text, no introductory phrases.`;
       }
     }
 
-    // Configure Claude API call
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
+    const response = await fetch(CHAT_COMPLETIONS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        max_tokens: 200,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
     });
+
+    if (!response.ok) {
+      const t = await response.text();
+      throw new Error(`Chat completions error: ${response.status} ${t}`);
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
 
     // Extract prompt from response
     let prompt = '';
-    if (Array.isArray(response.content) && response.content.length > 0) {
-      const lastContent = response.content[response.content.length - 1];
-      if (lastContent.type === 'text') {
-        prompt = lastContent.text.trim();
-      }
+    const msgContent = data.choices?.[0]?.message?.content;
+    if (typeof msgContent === 'string') {
+      prompt = msgContent.trim();
     }
 
     return new Response(JSON.stringify({ prompt }), {
@@ -191,7 +202,7 @@ Return only the enhanced prompt text, no introductory phrases.`;
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error calling Claude:', error);
+    console.error('Error calling prompt model:', error);
 
     return new Response(
       JSON.stringify({
