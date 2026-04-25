@@ -1,5 +1,11 @@
 import { useConversation } from '@/contexts/ConversationContext';
+import { getLocalBackendBaseUrl, isLocalTextBackend } from '@/lib/localBackend';
 import { supabase } from '@/lib/supabase';
+import {
+  apiInsertMessage,
+  apiListMessages,
+  apiUpdateMessage,
+} from '@/services/localDataApi';
 import { Content, Conversation, Message, Model } from '@shared/types';
 import { HistoryConversation } from '../types/misc.ts';
 import {
@@ -87,6 +93,9 @@ export const useMessagesQuery = () => {
     queryKey: ['messages', conversation.id],
     initialData: [],
     queryFn: async () => {
+      if (isLocalTextBackend()) {
+        return apiListMessages(conversation.id);
+      }
       const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
         .select('*')
@@ -110,6 +119,9 @@ export function useInsertMessageMutation() {
     mutationFn: async (
       message: Omit<Message, 'id' | 'created_at' | 'rating'>,
     ) => {
+      if (isLocalTextBackend()) {
+        return apiInsertMessage(message);
+      }
       const { data, error } = await supabase
         .from('messages')
         .insert([{ ...message }])
@@ -367,16 +379,22 @@ export function useParametricChatMutation({
       const newMessageId = crypto.randomUUID();
       let initialized = false;
 
-      // Start streaming request
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parametric-chat`,
+        isLocalTextBackend()
+          ? `${getLocalBackendBaseUrl()}/api/parametric-chat`
+          : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parametric-chat`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${
-              (await supabase.auth.getSession()).data.session?.access_token
-            }`,
+            ...(isLocalTextBackend()
+              ? {}
+              : {
+                  Authorization: `Bearer ${
+                    (await supabase.auth.getSession()).data.session
+                      ?.access_token
+                  }`,
+                }),
           },
           body: JSON.stringify({
             conversationId,
@@ -655,6 +673,9 @@ export function useUpdateMessageOptimisticMutation() {
 
   return useMutation({
     mutationFn: async ({ message }: { message: Message }) => {
+      if (isLocalTextBackend()) {
+        return apiUpdateMessage(message);
+      }
       const { data: updatedMessage, error: messageError } = await supabase
         .from('messages')
         .update({

@@ -1,4 +1,7 @@
+import { isLocalTextBackend } from '@/lib/localBackend';
+import { getEffectiveUserId } from '@/lib/localUser';
 import { supabase } from '@/lib/supabase';
+import { apiGetConversation, apiUpdateConversation } from '@/services/localDataApi';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,11 +31,15 @@ export default function EditorView() {
       if (!conversationId) {
         throw new Error('Conversation ID is required');
       }
+      if (isLocalTextBackend()) {
+        return apiGetConversation(conversationId);
+      }
+      const uid = getEffectiveUserId(user?.id);
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
         .eq('id', conversationId)
-        .eq('user_id', user?.id ?? '')
+        .eq('user_id', uid ?? '')
         .limit(1)
         .single();
 
@@ -47,6 +54,9 @@ export default function EditorView() {
   const { mutate: updateConversation, mutateAsync: updateConversationAsync } =
     useMutation({
       mutationFn: async (conversation: Conversation) => {
+        if (isLocalTextBackend()) {
+          return apiUpdateConversation(conversation);
+        }
         const { data, error } = await supabase
           .from('conversations')
           .update(conversation)

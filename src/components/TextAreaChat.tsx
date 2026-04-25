@@ -45,6 +45,7 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useMutation } from '@tanstack/react-query';
+import { getLocalBackendBaseUrl, isLocalTextBackend } from '@/lib/localBackend';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ModelSelector } from '@/components/ModelSelector';
@@ -1145,18 +1146,31 @@ function TextAreaChat({
     if (isGeneratingPrompt) return;
     setIsGeneratingPrompt(true);
     try {
-      const { data, error } = await supabase.functions.invoke(
-        'prompt-generator',
-        {
-          method: 'POST',
-          body: {
-            existingText: input.trim() || null,
-            type: type, // Send the mode type (parametric or creative)
+      const body = {
+        existingText: input.trim() || null,
+        type: type,
+      };
+      let data: { prompt?: string } | null = null;
+      if (isLocalTextBackend()) {
+        const r = await fetch(
+          `${getLocalBackendBaseUrl()}/api/prompt-generator`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
           },
-        },
-      );
+        );
+        if (!r.ok) throw new Error(r.statusText);
+        data = (await r.json()) as { prompt?: string };
+      } else {
+        const out = await supabase.functions.invoke('prompt-generator', {
+          method: 'POST',
+          body,
+        });
+        if (out.error) throw out.error;
+        data = out.data as { prompt?: string };
+      }
 
-      if (error) throw error;
       if (!data?.prompt) throw new Error('No prompt generated');
 
       setInput(data.prompt);

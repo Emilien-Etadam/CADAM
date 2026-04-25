@@ -16,7 +16,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
+import { isLocalTextBackend } from '@/lib/localBackend';
+import { getEffectiveUserId } from '@/lib/localUser';
 import { supabase } from '@/lib/supabase';
+import { apiListRecentConversations } from '@/services/localDataApi';
 import {
   Sheet,
   SheetContent,
@@ -50,11 +53,14 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
     queryKey: ['conversations', 'recent'],
     initialData: [],
     queryFn: async () => {
+      if (isLocalTextBackend()) {
+        return apiListRecentConversations(10);
+      }
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
         .order('updated_at', { ascending: false })
-        .eq('user_id', user?.id ?? '')
+        .eq('user_id', getEffectiveUserId(user?.id) ?? '')
         .limit(10)
         .overrideTypes<Array<{ settings: ConversationSettings }>>();
 

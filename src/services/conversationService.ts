@@ -1,6 +1,9 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Conversation, Content } from '@shared/types';
+import { getLocalBackendBaseUrl, isLocalTextBackend } from '@/lib/localBackend';
+import { getEffectiveUserId } from '@/lib/localUser';
 import { supabase } from '@/lib/supabase';
+import { apiGetConversation, apiUpdateConversation } from '@/services/localDataApi';
+import { Conversation, Content } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 
@@ -30,15 +33,20 @@ export function useConversation() {
         if (!conversationId) {
           throw new Error('Conversation ID is required');
         }
-        if (!user?.id) {
+        const uid = getEffectiveUserId(user?.id);
+        if (!uid) {
           throw new Error('User must be authenticated');
+        }
+
+        if (isLocalTextBackend()) {
+          return apiGetConversation(conversationId);
         }
 
         const { data, error } = await supabase
           .from('conversations')
           .select('*')
           .eq('id', conversationId)
-          .eq('user_id', user.id)
+          .eq('user_id', uid)
           .limit(1)
           .single()
           .overrideTypes<Conversation>();
@@ -53,6 +61,9 @@ export function useConversation() {
   const { mutate: updateConversation, mutateAsync: updateConversationAsync } =
     useMutation({
       mutationFn: async (conversation: Conversation) => {
+        if (isLocalTextBackend()) {
+          return apiUpdateConversation(conversation);
+        }
         const { data, error } = await supabase
           .from('conversations')
           .update(conversation)
@@ -118,6 +129,22 @@ export async function generateConversationTitle(
   conversationId: string,
   content: Content,
 ): Promise<string> {
+  if (isLocalTextBackend()) {
+    const response = await fetch(
+      `${getLocalBackendBaseUrl()}/api/title-generator`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, conversationId }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to generate title: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.title || 'New Conversation';
+  }
+
   const {
     data: { session },
   } = await supabase.auth.getSession();

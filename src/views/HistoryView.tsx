@@ -5,7 +5,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { isLocalTextBackend } from '@/lib/localBackend';
+import { getEffectiveUserId } from '@/lib/localUser';
 import { supabase } from '@/lib/supabase';
+import {
+  apiDeleteConversation,
+  apiListHistoryConversations,
+  apiPatchConversation,
+} from '@/services/localDataApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -38,15 +45,42 @@ export function HistoryView() {
 
   const conversationQuery = useQuery<HistoryConversation[]>({
     queryKey: ['conversations'],
-    enabled: !!user,
+    enabled: !!user || isLocalTextBackend(),
     queryFn: async () => {
+      if (isLocalTextBackend()) {
+        const conversationsData = await apiListHistoryConversations();
+        const formattedConversations = conversationsData.map((conv) => {
+          const rawContent = conv.first_message_content;
+          const firstMessageContent =
+            typeof rawContent === 'object' && rawContent !== null
+              ? (rawContent as Content)
+              : { text: '' };
+          const messageCount = conv.message_count ?? 0;
+
+          const formattedFirstMessage = {
+            text: firstMessageContent.text ?? '',
+            images: firstMessageContent.images ?? [],
+          };
+
+          return {
+            ...conv,
+            created_at: conv.created_at || new Date().toISOString(),
+            updated_at:
+              conv.updated_at || conv.created_at || new Date().toISOString(),
+            message_count: messageCount,
+            first_message: formattedFirstMessage as Content,
+          };
+        });
+        return formattedConversations;
+      }
+
       const { data: conversationsData, error: conversationsError } =
         await supabase
           .from('conversations')
           .select(
             `*, first_message:messages(content), messagesCount:messages(count)`,
           )
-          .eq('user_id', user?.id ?? '')
+          .eq('user_id', getEffectiveUserId(user?.id) ?? '')
           .order('updated_at', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1, { referencedTable: 'first_message' })
@@ -93,6 +127,10 @@ export function HistoryView() {
 
   const deleteConversation = useMutation({
     mutationFn: async (conversationId: string) => {
+      if (isLocalTextBackend()) {
+        await apiDeleteConversation(conversationId);
+        return;
+      }
       const { error } = await supabase
         .from('conversations')
         .delete()
@@ -151,6 +189,10 @@ export function HistoryView() {
       conversationId: string;
       newTitle: string;
     }) => {
+      if (isLocalTextBackend()) {
+        await apiPatchConversation(conversationId, { title: newTitle });
+        return;
+      }
       const { error } = await supabase
         .from('conversations')
         .update({ title: newTitle })
@@ -201,6 +243,10 @@ export function HistoryView() {
       conversationId: string;
       newPrivacy: 'public' | 'private';
     }) => {
+      if (isLocalTextBackend()) {
+        await apiPatchConversation(conversationId, { privacy: newPrivacy });
+        return;
+      }
       const { error } = await supabase
         .from('conversations')
         .update({ privacy: newPrivacy })
