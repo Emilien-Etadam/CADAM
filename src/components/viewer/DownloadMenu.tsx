@@ -8,7 +8,7 @@ import {
 } from '../ui/dropdown-menu';
 import { Loader2, ShoppingCart } from 'lucide-react';
 import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
-import posthog from 'posthog-js';
+import { phCapture } from '@/lib/localTelemetry';
 import {
   processUserModelForDownload,
   processUserModelForPrint,
@@ -19,7 +19,6 @@ import { generate3DModelFilename } from '@/utils/file-utils';
 import { useCurrentMessage } from '@/contexts/CurrentMessageContext';
 import { GLTF, OBJExporter, GLTFExporter } from 'three-stdlib';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import * as Sentry from '@sentry/react';
 import * as THREE from 'three';
 import { applyMaterialAdjustments } from '@/utils/meshUtils';
 import { MeshGifPreview } from './MeshGifPreview';
@@ -98,7 +97,7 @@ export function DownloadMenu({
   ]);
 
   const downloadSTL = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'STL',
@@ -126,12 +125,7 @@ export function DownloadMenu({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'STL',
-          },
-        });
+        console.error(error);
         toast({
           title: 'Error',
           description: 'Failed to prepare STL file.',
@@ -145,7 +139,7 @@ export function DownloadMenu({
   }, [gltf, toast, filename, meshData, conversation.id]);
 
   const downloadOBJ = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'OBJ_WITH_MTL',
@@ -316,12 +310,7 @@ export function DownloadMenu({
           }
         });
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'OBJ_WITH_MTL',
-          },
-        });
+        console.error(error);
 
         toast({
           title: 'Error',
@@ -336,7 +325,7 @@ export function DownloadMenu({
   }, [gltf, brightness, roughness, filename, meshData, conversation.id, toast]);
 
   const downloadGIF = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'GIF',
@@ -351,12 +340,7 @@ export function DownloadMenu({
           await gifRef.current.downloadGIF();
         }
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'GIF',
-          },
-        });
+        console.error(error);
 
         toast({
           title: 'Error',
@@ -371,7 +355,7 @@ export function DownloadMenu({
   }, [isGifReady, meshData, conversation.id, toast]);
 
   const downloadWithTextures = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'ZIP_WITH_TEXTURES',
@@ -398,16 +382,7 @@ export function DownloadMenu({
           throw new Error('Texture extraction returned false');
         }
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'ZIP_WITH_TEXTURES',
-            error: error instanceof Error ? error.message : 'Unknown error',
-            texture_types: Object.entries(hasPBRMaps)
-              .filter(([_, hasMap]) => hasMap)
-              .map(([type, _]) => type),
-          },
-        });
+        console.error(error);
 
         // Provide more helpful error messages
         let errorDescription = 'Failed to extract textures. ';
@@ -448,7 +423,7 @@ export function DownloadMenu({
     setTimeout(async () => {
       let preparingToastId: string | undefined;
       try {
-        posthog.capture('3d_print_service_clicked', {
+        phCapture('3d_print_service_clicked', {
           meshId: meshData.id,
           model_name: meshData?.prompt.model || 'Unknown Model',
           conversation_id: conversation.id,
@@ -477,15 +452,7 @@ export function DownloadMenu({
 
         if (!response.ok) {
           const errorData = await response.json();
-          Sentry.captureException(errorData, {
-            extra: {
-              meshId: meshData.id,
-              format: 'ZIP_WITH_TEXTURES',
-              texture_types: Object.entries(hasPBRMaps)
-                .filter(([_, hasMap]) => hasMap)
-                .map(([type, _]) => type),
-            },
-          });
+          console.error('Mandarin3D print submit failed', errorData);
           throw new Error(
             errorData.message || 'Failed to send model to Mandarin3D',
           );
@@ -537,15 +504,7 @@ export function DownloadMenu({
           dismiss(preparingToastId);
         }
 
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'ZIP_WITH_TEXTURES',
-            texture_types: Object.entries(hasPBRMaps)
-              .filter(([_, hasMap]) => hasMap)
-              .map(([type, _]) => type),
-          },
-        });
+        console.error(error);
 
         toast({
           title: 'Error',
@@ -657,7 +616,7 @@ export function DownloadMenu({
   );
 
   const downloadGLB = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'GLB_ENHANCED',
@@ -685,12 +644,7 @@ export function DownloadMenu({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'GLB_ENHANCED',
-          },
-        });
+        console.error(error);
 
         toast({
           title: 'Error',
@@ -710,12 +664,7 @@ export function DownloadMenu({
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         } catch (fallbackError) {
-          Sentry.captureException(fallbackError, {
-            extra: {
-              meshId: meshData.id,
-              format: 'GLB_ENHANCED',
-            },
-          });
+          console.error(error);
         }
       } finally {
         setIsDownloadingGLB(false);
@@ -737,7 +686,7 @@ export function DownloadMenu({
   ]);
 
   const downloadFBX = useCallback(() => {
-    posthog.capture('3d_model_download', {
+    phCapture('3d_model_download', {
       meshId: meshData.id,
       model_name: meshData?.prompt.model || 'Unknown Model',
       format: 'FBX_ORIGINAL',
@@ -758,12 +707,7 @@ export function DownloadMenu({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (error) {
-        Sentry.captureException(error, {
-          extra: {
-            meshId: meshData.id,
-            format: 'FBX_ORIGINAL',
-          },
-        });
+        console.error(error);
 
         toast({
           title: 'Error',

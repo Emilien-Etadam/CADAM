@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Loader2,
   ImageIcon,
-  Sparkles,
 } from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import { StreamingCodeBlock } from '@/components/chat/StreamingCodeBlock';
@@ -19,14 +18,9 @@ import { RefreshCw } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import {
   cn,
-  CREATIVE_MODELS,
   getBackupModel,
   PARAMETRIC_MODELS,
 } from '@/lib/utils';
-import { Link } from 'react-router-dom';
-import { TrialDialog } from '@/components/auth/TrialDialog';
-import { getLevel, useAuth } from '@/contexts/AuthContext';
-import { ImageViewer } from '@/components/ImageViewer';
 import { useConversation } from '@/contexts/ConversationContext';
 import {
   Tooltip,
@@ -43,8 +37,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useMeshData } from '@/hooks/useMeshData';
-import { MeshImagePreview } from '@/components/viewer/MeshImagePreview';
 import { TreeNode } from '@shared/Tree';
 
 const linkParametricMode = (text: string) =>
@@ -65,29 +57,9 @@ interface AssistantMessageProps {
     rating: number;
   }) => void;
   onRetry?: ({ model, id }: { model: Model; id: string }) => void;
-  onUpscale?: ({
-    meshId,
-    parentMessageId,
-  }: {
-    meshId: string;
-    parentMessageId: string | null;
-  }) => void;
   restoreMessage?: (message: Message) => void;
   limitReached?: boolean;
 }
-
-const paymentRequiredMessages = {
-  insufficient_tokens: <InsufficientTokensMessage />,
-  trial_user_E9ueHIgpei2JvFUDeJLEnwzDhy7GF38a: <TrialUserMessage />,
-  free_user_E9ueHIgpei2JvFUDeJLEnwzDhy7GF38a: <FreeUserMessage />,
-  limit_reached_E9ueHIgpei2JvFUDeJLEnwzDhy7GF38a: <LimitReachedMessage />,
-  limit_reached_image_E9ueHIgpei2JvFUDeJLEnwzDhy7GF38a: (
-    <ImageLimitReachedMessage />
-  ),
-  limit_reached_mesh_E9ueHIgpei2JvFUDeJLEnwzDhy7GF38a: (
-    <MeshLimitReachedMessage />
-  ),
-};
 
 export function AssistantMessage({
   message,
@@ -96,7 +68,6 @@ export function AssistantMessage({
   changeRating,
   restoreMessage,
   onRetry,
-  onUpscale,
   limitReached,
 }: AssistantMessageProps) {
   const { conversation, updateConversation } = useConversation();
@@ -137,26 +108,6 @@ export function AssistantMessage({
     [message.siblings],
   );
 
-  // Fetch mesh data to check status
-  const { data: meshDataQuery } = useMeshData({
-    id: message.content.mesh?.id ?? '',
-  });
-
-  // Upscale functionality for quality/draft meshes - only show when mesh is complete
-  const canUpscale =
-    model === 'quality' &&
-    message.content.mesh &&
-    meshDataQuery.data?.status === 'success';
-
-  const handleUpscale = useCallback(() => {
-    if (!message.content.mesh || !onUpscale) return;
-
-    onUpscale({
-      meshId: message.content.mesh.id,
-      parentMessageId: message.parent_message_id,
-    });
-  }, [message.content.mesh, message.parent_message_id, onUpscale]);
-
   // Check if this message is the last one in the conversation
   const isLastMessage = conversation.current_message_leaf_id === message.id;
 
@@ -188,22 +139,10 @@ export function AssistantMessage({
       >
         <div className="flex flex-col gap-3 p-3 text-sm text-adam-text-primary">
           {message.content.error ? (
-            <>
-              {message.content.error in paymentRequiredMessages ? (
-                paymentRequiredMessages[
-                  message.content.error as keyof typeof paymentRequiredMessages
-                ]
-              ) : message.content.text &&
-                message.content.text in paymentRequiredMessages ? (
-                paymentRequiredMessages[
-                  message.content.text as keyof typeof paymentRequiredMessages
-                ]
-              ) : (
-                <span className="px-1">
-                  We ran into some trouble with your prompt
-                </span>
-              )}
-            </>
+            <span className="px-1 text-adam-neutral-300">
+              This request could not be completed. Try again or adjust your
+              prompt.
+            </span>
           ) : (
             <>
               {conversation.type === 'parametric' &&
@@ -307,25 +246,6 @@ export function AssistantMessage({
                     })}
                   </div>
                 )}
-              <AssistantMessageImagesViewer message={message} />
-              {message.content.mesh && (
-                <div
-                  onClick={() => {
-                    if (currentMessage && message.id === currentMessage?.id) {
-                      setCurrentMessage(null);
-                    } else {
-                      setCurrentMessage(message);
-                    }
-                  }}
-                  className={cn(
-                    'cursor-pointer overflow-hidden rounded-md',
-                    currentMessage?.id === message.id &&
-                      'outline outline-2 outline-adam-blue',
-                  )}
-                >
-                  <MeshImagePreview meshId={message.content.mesh.id} />
-                </div>
-              )}
               {message.content.artifact &&
                 !message.content.toolCalls?.some(
                   (c) =>
@@ -444,32 +364,6 @@ export function AssistantMessage({
                   )}
                 </div>
               )}
-              {canUpscale && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleUpscale}
-                      disabled={isLoading || limitReached}
-                      className={cn(
-                        'h-6 gap-1 rounded-lg px-2 text-xs',
-                        limitReached && 'cursor-not-allowed opacity-50',
-                      )}
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      <span>Upscale</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <span>
-                      {limitReached
-                        ? 'No generations remaining'
-                        : 'Upscale your 3D asset quality'}
-                    </span>
-                  </TooltipContent>
-                </Tooltip>
-              )}
               {message.siblings.length > 1 && updateConversation && (
                 <div className="flex h-6 items-center gap-0.5 rounded-lg border border-adam-neutral-700 bg-adam-bg-secondary-dark">
                   <Button
@@ -568,117 +462,6 @@ function ObjectButton({
   );
 }
 
-function FreeUserMessage() {
-  return (
-    <span>
-      You are on a free plan!{' '}
-      <Link to="/subscription" className="text-adam-blue hover:underline">
-        Upgrade
-      </Link>{' '}
-      to a paid plan to experience all the features Adam has to offer.
-    </span>
-  );
-}
-
-function TrialUserMessage() {
-  return (
-    <span>
-      <TrialDialog>
-        <span className="cursor-pointer text-adam-blue hover:underline">
-          Start a trial
-        </span>
-      </TrialDialog>{' '}
-      to experience all Pro features for 7 days, completely free.
-    </span>
-  );
-}
-
-function LimitReachedMessage() {
-  return (
-    <span>
-      You have reached the limit of parametric generations in your current plan.{' '}
-      <Link to="/subscription" className="text-adam-blue hover:underline">
-        Upgrade
-      </Link>{' '}
-      for more parametric generations :)
-    </span>
-  );
-}
-
-function ImageLimitReachedMessage() {
-  return (
-    <span>
-      You have reached the limit of image generations in your current plan.{' '}
-      <Link to="/subscription" className="text-adam-blue hover:underline">
-        Upgrade
-      </Link>{' '}
-      for more image generations :)
-    </span>
-  );
-}
-
-function InsufficientTokensMessage() {
-  const { billing } = useAuth();
-  const level = getLevel(billing);
-  return (
-    <span>
-      You don't have enough tokens for this operation.{' '}
-      <Link to="/settings" className="text-adam-blue hover:underline">
-        Buy more tokens
-      </Link>
-      {level === 'free' && (
-        <>
-          {' '}
-          or{' '}
-          <Link to="/subscription" className="text-adam-blue hover:underline">
-            upgrade your plan
-          </Link>
-        </>
-      )}
-      .
-    </span>
-  );
-}
-
-function MeshLimitReachedMessage() {
-  const { billing } = useAuth();
-  const level = getLevel(billing);
-  if (level === 'free') {
-    return (
-      <span>
-        You have reached the limit of 3 creative generations per day. Please
-        upgrade to{' '}
-        <Link to="/subscription" className="text-adam-blue hover:underline">
-          a paid plan
-        </Link>{' '}
-        for more creative generations :)
-      </span>
-    );
-  }
-
-  if (level === 'standard') {
-    return (
-      <span>
-        You have reached the limit of 100 creative generations per month. Please
-        upgrade to{' '}
-        <Link to="/subscription" className="text-adam-blue hover:underline">
-          Pro
-        </Link>{' '}
-        for more creative generations :)
-      </span>
-    );
-  }
-
-  if (level === 'pro') {
-    return (
-      <span>
-        You have reached the limit of 1500 generations per month. Let us know if
-        you need more!
-      </span>
-    );
-  }
-}
-
 function RetryModelSelector({
   message,
   parentMessage,
@@ -695,14 +478,12 @@ function RetryModelSelector({
   const [isOpen, setIsOpen] = useState(false);
   const { conversation } = useConversation();
 
-  // Get the appropriate model list based on conversation type and content
-  const models =
-    conversation.type === 'parametric' ? PARAMETRIC_MODELS : CREATIVE_MODELS;
+  const models = PARAMETRIC_MODELS;
 
   const selectedModelConfig =
     models.find(
-      (model) =>
-        model.id ===
+      (m) =>
+        m.id ===
         getBackupModel({
           message,
           parentMessage,
@@ -710,18 +491,9 @@ function RetryModelSelector({
         }),
     ) ?? models[0];
 
-  // Filter out current model and handle multiple images case
-  const availableModels = models
-    .filter((model) => model.id !== selectedModelConfig.id)
-    .map((model) => {
-      if (
-        parentMessage?.content.images &&
-        parentMessage.content.images.length > 1
-      ) {
-        return { ...model, disabled: model.id !== 'quality' };
-      }
-      return model;
-    });
+  const availableModels = models.filter(
+    (m) => m.id !== selectedModelConfig.id,
+  );
 
   if (availableModels.length === 0) {
     return (
@@ -783,54 +555,5 @@ function RetryModelSelector({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function AssistantMessageImagesViewer({ message }: { message: Message }) {
-  const { currentMessage, setCurrentMessage } = useCurrentMessage();
-  const isMobile = useIsMobile();
-
-  if (!message.content.images) {
-    return null;
-  }
-
-  return (
-    <div
-      className={cn(
-        message.content.images.length > 1 && 'grid-cols-2',
-        'grid gap-3',
-      )}
-    >
-      {message.content.images.map((image: string, index: number) => (
-        <div
-          key={image}
-          onClick={() => {
-            if (
-              currentMessage &&
-              message.id === currentMessage?.id &&
-              currentMessage?.content.index === index
-            ) {
-              setCurrentMessage(null);
-            } else {
-              setCurrentMessage({
-                ...message,
-                content: { ...message.content, index },
-              });
-            }
-          }}
-        >
-          <ImageViewer
-            className={cn(
-              'aspect-square h-fit cursor-pointer',
-              currentMessage?.id === message.id &&
-                currentMessage?.content.index === index &&
-                'outline outline-2 outline-adam-blue',
-            )}
-            image={image}
-            clickable={!isMobile}
-          />
-        </div>
-      ))}
-    </div>
   );
 }

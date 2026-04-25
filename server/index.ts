@@ -2,13 +2,41 @@ import { config } from 'dotenv';
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { pool, ensureLocalUser, corsHeaders, devUser } from './db.js';
+import { pool, ensureLocalUser, devUser } from './db.js';
 import { handleParametricChatRequest } from './parametricChat.js';
 import { handleTitleGeneratorRequest } from './titleGenerator.js';
 import { handlePromptGeneratorRequest } from './promptGenerator.js';
 
 config({ path: '.env.local' });
 config();
+
+const DEV_CORS_ORIGINS = new Set([
+  'http://192.168.30.212:4173',
+  'http://192.168.30.212:4174',
+  'http://127.0.0.1:4173',
+  'http://127.0.0.1:4174',
+  'http://localhost:4173',
+  'http://localhost:4174',
+]);
+
+function localCorsHeaders(
+  req: import('node:http').IncomingMessage,
+): Record<string, string> {
+  const origin = req.headers.origin;
+  if (origin && DEV_CORS_ORIGINS.has(origin)) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Headers':
+        'authorization, x-client-info, apikey, content-type',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    };
+  }
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
+  };
+}
 
 const HOST = process.env.LOCAL_SERVER_HOST ?? '127.0.0.1';
 const PORT = parseInt(process.env.LOCAL_SERVER_PORT ?? '8787', 10);
@@ -57,7 +85,7 @@ createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}`);
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, corsHeaders);
+    res.writeHead(204, localCorsHeaders(req));
     res.end();
     return;
   }
@@ -66,7 +94,7 @@ createServer(async (req, res) => {
     await ensureLocalUser();
   } catch (e) {
     console.error(e);
-    res.writeHead(500, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(500, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'database_unavailable' }));
     return;
   }
@@ -108,7 +136,7 @@ createServer(async (req, res) => {
          ORDER BY c.updated_at DESC`,
         [uid],
       );
-      res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify(r.rows));
       return;
     }
@@ -119,7 +147,7 @@ createServer(async (req, res) => {
        LIMIT $2`,
       [uid, n],
     );
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows));
     return;
   }
@@ -144,7 +172,7 @@ createServer(async (req, res) => {
        RETURNING *`,
       [cid, uid, title, type, JSON.stringify(settings)],
     );
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -159,11 +187,11 @@ createServer(async (req, res) => {
         [id, uid],
       );
       if (r.rowCount === 0) {
-        res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+        res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'not_found' }));
         return;
       }
-      res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify(r.rows[0]));
       return;
     }
@@ -175,7 +203,7 @@ createServer(async (req, res) => {
         uid,
       ]);
       if (cur.rowCount === 0) {
-        res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+        res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'not_found' }));
         return;
       }
@@ -197,7 +225,7 @@ createServer(async (req, res) => {
          RETURNING *`,
         [title, typ, privacy, leaf, settings, id, uid],
       );
-      res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify(r.rows[0]));
       return;
     }
@@ -207,7 +235,7 @@ createServer(async (req, res) => {
         id,
         uid,
       ]);
-      res.writeHead(204, corsHeaders);
+      res.writeHead(204, localCorsHeaders(req));
       res.end();
       return;
     }
@@ -226,7 +254,7 @@ createServer(async (req, res) => {
        ORDER BY m.created_at ASC`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows));
     return;
   }
@@ -260,11 +288,11 @@ createServer(async (req, res) => {
       ],
     );
     if (r.rowCount === 0) {
-      res.writeHead(403, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(403, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'forbidden' }));
       return;
     }
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -288,11 +316,11 @@ createServer(async (req, res) => {
       ],
     );
     if (r.rowCount === 0) {
-      res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'not_found' }));
       return;
     }
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -300,7 +328,7 @@ createServer(async (req, res) => {
   if (url.pathname === '/api/messages' && req.method === 'GET') {
     const conversationId = url.searchParams.get('conversationId');
     if (!conversationId) {
-      res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(400, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'conversationId' }));
       return;
     }
@@ -312,7 +340,7 @@ createServer(async (req, res) => {
        ORDER BY m.created_at ASC`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows));
     return;
   }
@@ -320,7 +348,7 @@ createServer(async (req, res) => {
   if (url.pathname === '/api/visual-messages' && req.method === 'GET') {
     const conversationId = url.searchParams.get('conversationId');
     if (!conversationId) {
-      res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.writeHead(400, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'conversationId' }));
       return;
     }
@@ -333,12 +361,12 @@ createServer(async (req, res) => {
        LIMIT 50`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
     res.end(JSON.stringify(r.rows));
     return;
   }
 
-  res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+  res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'not_found' }));
 }).listen(PORT, HOST, () => {
   console.log(`Local CADAM server http://${HOST}:${PORT}`);

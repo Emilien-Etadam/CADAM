@@ -1,15 +1,14 @@
-import { useProfile, useAvatarUrl } from '@/services/profileService';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useAuth } from '@/contexts/AuthContext';
 import { getInitials } from '@/lib/utils';
 
 export function UserAvatar({ className }: { className?: string }) {
-  const { data: profile } = useProfile();
-  const { data: avatarUrl } = useAvatarUrl(profile?.avatar_path);
-
+  const { user } = useAuth();
   return (
     <Avatar className={className}>
-      <AvatarImage src={avatarUrl || undefined} />
-      <AvatarFallback>{getInitials(profile?.full_name || null)}</AvatarFallback>
+      <AvatarFallback>
+        {getInitials((user?.email || 'User').split('@')[0] ?? 'U')}
+      </AvatarFallback>
     </Avatar>
   );
 }

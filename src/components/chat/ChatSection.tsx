@@ -6,25 +6,14 @@ import { SuggestionPills } from '@/components/chat/SuggestionPills';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { AssistantMessage } from '@/components/chat/AssistantMessage';
 import { UserMessage } from '@/components/chat/UserMessage';
-import { ShareContent } from '@/components/ui/ShareContent';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
 import { useConversation } from '@/contexts/ConversationContext';
 import { AssistantLoading } from '@/components/chat/AssistantLoading';
 import { ChatTitle } from '@/components/chat/ChatTitle';
-import { LimitReachedMessage } from '@/components/LimitReachedMessage';
-import { LowPromptsWarningMessage } from '@/components/LowPromptsWarningMessage';
 import { CreateIcon } from '@/components/icons/ui/CreateIcon';
 import { ConditionalWrapper } from '@/components/ConditionalWrapper';
 import { TreeNode } from '@shared/Tree';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Share } from 'lucide-react';
-import { useMeshData } from '@/hooks/useMeshData';
 
 interface ChatSectionProps {
   messages: TreeNode<Message>[];
@@ -41,13 +30,6 @@ interface ChatSectionProps {
   }) => void;
   restoreMessage?: (message: Message) => void;
   retryMessage?: ({ model, id }: { model: Model; id: string }) => void;
-  upscaleMessage?: ({
-    meshId,
-    parentMessageId,
-  }: {
-    meshId: string;
-    parentMessageId: string | null;
-  }) => void;
 }
 
 export function ChatSection({
@@ -59,13 +41,10 @@ export function ChatSection({
   changeRating,
   restoreMessage,
   retryMessage,
-  upscaleMessage,
 }: ChatSectionProps) {
   const isMobile = useIsMobile();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { conversation, updateConversation } = useConversation();
-  const { session, billing } = useAuth();
-  const totalTokens = billing?.tokens.total ?? 0;
   const navigate = useNavigate();
 
   const scrollToBottom = useCallback(() => {
@@ -83,20 +62,10 @@ export function ChatSection({
     conversation.settings?.model ??
     (conversation.type === 'parametric' ? 'fast' : 'quality');
 
-  const lowPrompts = useMemo(() => {
-    return totalTokens > 0 && totalTokens <= 10;
-  }, [totalTokens]);
-
-  const limitReached = useMemo(() => {
-    return totalTokens <= 0;
-  }, [totalTokens]);
-
-  // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Also scroll when generating state changes
   useEffect(() => {
     if (isLoading) {
       scrollToBottom();
@@ -112,7 +81,6 @@ export function ChatSection({
     return messages[messages.length - 1];
   }, [messages, conversation.current_message_leaf_id]);
 
-  // Get the current version number based on assistant messages only
   const getCurrentVersion = useCallback(
     (index: number) => {
       return messages.slice(0, index + 1).filter((m) => m.role === 'assistant')
@@ -121,33 +89,10 @@ export function ChatSection({
     [messages],
   );
 
-  // Check mesh loading status if the last message has a mesh
-  const { data: meshData } = useMeshData({
-    id: lastMessage?.content?.mesh?.id || '',
-  });
-
-  // Only show suggestions when mesh is fully loaded or if there's no mesh
-  const shouldShowSuggestions = useMemo(() => {
-    const suggestions =
-      lastMessage?.content?.artifact?.suggestions ||
-      lastMessage?.content?.suggestions ||
-      [];
-
-    // No suggestions to show
-    if (suggestions.length === 0) return false;
-
-    // If there's no mesh, show suggestions immediately
-    if (!lastMessage?.content?.mesh) return true;
-
-    // If there's a mesh, only show suggestions when it's fully loaded
-    return meshData?.status === 'success';
-  }, [lastMessage, meshData]);
-
-  const suggestions = shouldShowSuggestions
-    ? lastMessage?.content?.artifact?.suggestions ||
-      lastMessage?.content?.suggestions ||
-      []
-    : [];
+  const suggestions =
+    lastMessage?.content?.artifact?.suggestions ||
+    lastMessage?.content?.suggestions ||
+    [];
 
   const handleSuggestionSelect = useCallback(
     (suggestion: string) => {
@@ -160,7 +105,7 @@ export function ChatSection({
   );
 
   const handleModelChange = useCallback(
-    (model: Model) => {
+    (newModel: Model) => {
       if (!updateConversation) return;
       updateConversation({
         ...conversation,
@@ -168,7 +113,7 @@ export function ChatSection({
           ...(typeof conversation.settings === 'object'
             ? conversation.settings
             : {}),
-          model: model,
+          model: newModel,
         },
       });
     },
@@ -191,40 +136,16 @@ export function ChatSection({
           </div>
         </ConditionalWrapper>
         <div className="flex items-center gap-3">
-          {isMobile ? (
+          {isMobile && (
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8 bg-transparent p-0 hover:bg-transparent"
-              onClick={() => {
-                navigate('/');
-              }}
-              aria-label="New Creation"
+              onClick={() => navigate('/')}
+              aria-label="New chat"
             >
               <CreateIcon className="h-5 w-5 text-adam-text-primary" />
             </Button>
-          ) : (
-            <>
-              {updateConversation && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="flex h-8 items-center gap-2 rounded-full px-3 text-adam-text-primary hover:bg-adam-neutral-950 hover:text-adam-neutral-10 focus-visible:ring-0"
-                    >
-                      <Share className="h-[14px] w-[14px] min-w-[14px]" />
-                      <span>Share</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    className="w-72 rounded-xl bg-adam-background-1 p-3"
-                  >
-                    <ShareContent />
-                  </PopoverContent>
-                </Popover>
-              )}
-            </>
           )}
         </div>
       </div>
@@ -244,16 +165,15 @@ export function ChatSection({
                     isLoading={isLoading}
                     currentVersion={getCurrentVersion(index)}
                     restoreMessage={restoreMessage}
-                    limitReached={limitReached}
+                    limitReached={false}
                     onRetry={retryMessage}
-                    onUpscale={upscaleMessage}
                   />
                 ) : (
                   <UserMessage
                     message={message}
                     onEdit={onEdit}
                     isLoading={isLoading}
-                    limitReached={limitReached}
+                    limitReached={false}
                   />
                 )}
               </div>
@@ -262,30 +182,21 @@ export function ChatSection({
           {isLoading && lastMessage?.role !== 'assistant' && (
             <AssistantLoading />
           )}
-          {/* Made the Low Prompt Warning not Sticky */}
-          {session && session.user && limitReached && <LimitReachedMessage />}
-          {session && session.user && lowPrompts && !limitReached && (
-            <LowPromptsWarningMessage
-              tokensRemaining={totalTokens}
-              layout="stacked"
-            />
-          )}
         </div>
       </ScrollArea>
       {onSendMessage && (
         <div className="w-full min-w-52 max-w-xl bg-transparent px-4 pb-6">
           <SuggestionPills
-            disabled={limitReached}
+            disabled={false}
             suggestions={suggestions}
             onSelect={handleSuggestionSelect}
           />
           <TextAreaChat
             stopGenerating={stopGenerating}
             onSubmit={onSendMessage}
-            placeholder="Keep iterating with Adam..."
+            placeholder="Keep iterating…"
             isLoading={isLoading}
-            disabled={limitReached}
-            type={conversation.type}
+            disabled={false}
             model={model}
             setModel={handleModelChange}
             conversation={conversation}

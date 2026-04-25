@@ -1,124 +1,21 @@
-import * as Sentry from '@sentry/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  createBrowserRouter,
-  createRoutesFromChildren,
-  matchRoutes,
-  Navigate,
-  Outlet,
-  RouterProvider,
-  useLocation,
-  useNavigationType,
-} from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
 import App from './App.tsx';
-import { PostHogProvider } from 'posthog-js/react';
 import './index.css';
-import React from 'react';
 import { ErrorView } from './views/ErrorView.tsx';
-import { SignInView } from './views/SignInView.tsx';
-import { SignUpView } from './views/SignUpView.tsx';
-import { SignUpEmailView } from './views/SignUpEmailView.tsx';
-import { ResetPasswordView } from './views/ResetPasswordView.tsx';
-import { PrivacyPolicyView } from './views/PrivacyPolicyView.tsx';
-import { UpdatePasswordView } from './views/UpdatePasswordView.tsx';
-import { TermsOfServiceView } from './views/TermsOfServiceView.tsx';
-import EmailConfirmation from './views/EmailConfirmation.tsx';
 import { PromptView } from './views/PromptView.tsx';
-import { SubscriptionView } from './views/SubscriptionView.tsx';
 import { HistoryView } from './views/HistoryView.tsx';
-import { AuthGuard } from './components/auth/AuthGuard.tsx';
 import { Layout } from './components/Layout.tsx';
-import ShareView from './views/ShareView.tsx';
 import EditorView from './views/EditorView.tsx';
-import SettingsView from './views/SettingsView.tsx';
-import { isLocalTextBackend } from './lib/localBackend';
-import { isSupabaseConfigMissing } from './lib/supabase.ts';
 
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN ?? '',
-  integrations: [
-    Sentry.reactRouterV6BrowserTracingIntegration({
-      useEffect: React.useEffect,
-      useLocation,
-      useNavigationType,
-      createRoutesFromChildren,
-      matchRoutes,
-    }),
-  ],
-  environment: import.meta.env.VITE_SENTRY_ENVIRONMENT ?? 'local',
-  tracesSampleRate: 1.0,
-});
-
-const sentryCreateBrowserRouter =
-  Sentry.wrapCreateBrowserRouterV6(createBrowserRouter);
-
-const MissingConfig = () => (
-  <div className="flex min-h-screen items-center justify-center bg-adam-bg-secondary-dark">
-    <div className="max-w-xl px-4 text-center text-red-500">
-      Missing API Keys. Please copy .env.local.template to .env.local and
-      restart.
-    </div>
-  </div>
-);
-
-const router = sentryCreateBrowserRouter(
+const router = createBrowserRouter(
   [
     {
       path: '/',
       element: <App />,
       errorElement: <ErrorView />,
       children: [
-        {
-          path: '/signin',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <SignInView />
-          ),
-        },
-        {
-          path: '/signup',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <SignUpView />
-          ),
-        },
-        {
-          path: '/signup-email',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <SignUpEmailView />
-          ),
-        },
-        {
-          path: '/reset-password',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <ResetPasswordView />
-          ),
-        },
-        {
-          path: '/confirm-email',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <EmailConfirmation />
-          ),
-        },
-        { path: '/privacy-policy', element: <PrivacyPolicyView /> },
-        { path: '/terms-of-service', element: <TermsOfServiceView /> },
-        {
-          path: '/update-password',
-          element: isLocalTextBackend() ? (
-            <Navigate to="/" replace />
-          ) : (
-            <UpdatePasswordView />
-          ),
-        },
         {
           element: <Layout />,
           children: [
@@ -128,38 +25,14 @@ const router = sentryCreateBrowserRouter(
               errorElement: <ErrorView />,
             },
             {
-              path: '/share/:id',
-              element: <ShareView />,
+              path: '/editor/:id',
+              element: <EditorView />,
               errorElement: <ErrorView />,
             },
             {
-              element: (
-                <AuthGuard>
-                  <Outlet />
-                </AuthGuard>
-              ),
-              children: [
-                {
-                  path: '/editor/:id',
-                  element: <EditorView />,
-                  errorElement: <ErrorView />,
-                },
-                {
-                  path: '/history',
-                  errorElement: <ErrorView />,
-                  element: <HistoryView />,
-                },
-                {
-                  path: '/subscription',
-                  errorElement: <ErrorView />,
-                  element: <SubscriptionView />,
-                },
-                {
-                  path: '/settings',
-                  errorElement: <ErrorView />,
-                  element: <SettingsView />,
-                },
-              ],
+              path: '/history',
+              errorElement: <ErrorView />,
+              element: <HistoryView />,
             },
             { path: '*', element: <Navigate to="/" replace /> },
           ],
@@ -171,19 +44,7 @@ const router = sentryCreateBrowserRouter(
 );
 
 createRoot(document.getElementById('root')!).render(
-  isSupabaseConfigMissing && !isLocalTextBackend() ? (
-    <MissingConfig />
-  ) : (
-    <StrictMode>
-      <PostHogProvider
-        apiKey={import.meta.env.VITE_POSTHOG_PROJECT_KEY ?? ''}
-        options={{
-          api_host: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jackson-pollock`,
-          person_profiles: 'always',
-        }}
-      >
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
-      </PostHogProvider>
-    </StrictMode>
-  ),
+  <StrictMode>
+    <RouterProvider router={router} future={{ v7_startTransition: true }} />
+  </StrictMode>,
 );

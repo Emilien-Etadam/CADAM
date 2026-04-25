@@ -1,195 +1,77 @@
-import { useNavigate, Link, useOutletContext } from 'react-router-dom';
-import { ArrowUpRight, LogIn } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { isLocalTextBackend } from '@/lib/localBackend';
 import { getEffectiveUserId } from '@/lib/localUser';
-import { supabase } from '@/lib/supabase';
 import { apiCreateConversation, apiPatchConversation } from '@/services/localDataApi';
 import TextAreaChat from '@/components/TextAreaChat';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
-import { Content, Conversation, Model } from '@shared/types';
-import { MessageItem } from '../types/misc.ts';
-import { LimitReachedMessage } from '@/components/LimitReachedMessage';
-import { LowPromptsWarningMessage } from '@/components/LowPromptsWarningMessage';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { Content, Conversation, Model } from '@shared/types';
 import { cn } from '@/lib/utils';
 import { makeUuid } from '@/lib/uuid';
-import { SelectedItemsContext } from '@/contexts/SelectedItemsContext';
-import posthog from 'posthog-js';
-import * as Sentry from '@sentry/react';
 import { generateConversationTitle } from '@/services/conversationService';
 import { useSendContentMutation } from '@/services/messageService';
-import { useProfile } from '@/services/profileService';
 
 export function PromptView() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, billing, isLoading } = useAuth();
-  const totalTokens = billing?.tokens.total ?? 0;
-  const { data: profile, isLoading: isProfileLoading } = useProfile();
+  const { user } = useAuth();
   const { isSidebarOpen } = useOutletContext<{ isSidebarOpen: boolean }>();
   const queryClient = useQueryClient();
 
-  const firstName = useMemo(() => {
-    // Wait until the profile query resolves for signed-in users so the
-    // greeting doesn't flash the email local-part before snapping to the
-    // real first name.
-    if (user && isProfileLoading) return '';
-    const source = profile?.full_name || user?.email?.split('@')[0] || '';
-    return source.trim().split(/\s+/)[0] || '';
-  }, [profile?.full_name, user, isProfileLoading]);
-
-  const [type, setType] = useState<'parametric' | 'creative'>('parametric');
-
   const [model, setModel] = useState<Model>('google/gemini-3.1-pro-preview');
-
-  const handleTypeChange = (newType: 'parametric' | 'creative') => {
-    setType(newType);
-    // Reset model to the default for the new type
-    if (newType === 'creative') {
-      setModel('quality');
-    } else {
-      setModel('google/gemini-3.1-pro-preview');
-    }
-  };
-
   const [isLoaded, setIsLoaded] = useState(false);
   const isMobile = useIsMobile();
-  const [images, setImages] = useState<MessageItem[]>([]);
-  const [mesh, setMesh] = useState<MessageItem | null>(null);
 
-  const newConversationId = useMemo(() => {
-    return makeUuid();
-  }, []);
-
-  const lowPrompts = useMemo(() => {
-    if (isLoading) return false;
-    return totalTokens > 0 && totalTokens <= 10;
-  }, [totalTokens, isLoading]);
-
-  const limitReached = useMemo(() => {
-    if (isLoading) return false;
-    return totalTokens <= 0;
-  }, [totalTokens, isLoading]);
+  const newConversationId = useMemo(() => makeUuid(), []);
 
   const { mutate: sendMessage } = useSendContentMutation({
     conversation: {
       id: newConversationId,
       user_id: getEffectiveUserId(user?.id) ?? '',
-      type: type,
+      type: 'parametric',
       settings: { model: model },
       current_message_leaf_id: null,
     },
   });
 
-  // Trigger fade in on mount
   useEffect(() => {
-    // Use requestAnimationFrame to ensure the initial render is complete
-    const frame = requestAnimationFrame(() => {
-      setIsLoaded(true);
-    });
+    const frame = requestAnimationFrame(() => setIsLoaded(true));
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Helper function to get time-based greeting (memoized for performance)
   const getTimeBasedGreeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) {
-      return 'Good morning';
-    } else if (hour < 18) {
-      return 'Good afternoon';
-    } else {
-      return 'Good evening';
-    }
-  }, []); // Empty dependency array means it only calculates once per page load
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
 
   const { mutate: handleGenerate } = useMutation({
     mutationFn: async (content: Content) => {
-      posthog.capture('new_conversation', {
-        type: type,
-        model_name: model,
-        text: (content.text ?? '').trim().slice(0, 100),
-        image_count: content.images?.length ?? 0,
-        mesh_count: content.mesh ? 1 : 0,
-        conversation_id: newConversationId,
+      const conversation = await apiCreateConversation({
+        id: newConversationId,
+        title: 'New Conversation',
+        type: 'parametric',
+        settings: { model: model },
       });
-
-      let conversation: { id: string };
-      if (isLocalTextBackend()) {
-        conversation = await apiCreateConversation({
-          id: newConversationId,
-          title: 'New Conversation',
-          type: type,
-          settings: {
-            model: model,
-          },
-        });
-      } else {
-        const { data, error: conversationError } = await supabase
-          .from('conversations')
-          .insert([
-            {
-              id: newConversationId,
-              user_id: user?.id ?? '',
-              title: 'New Conversation',
-              type: type,
-              settings: {
-                model: model,
-              },
-            },
-          ])
-          .select()
-          .single();
-
-        if (conversationError) throw conversationError;
-        conversation = data as { id: string };
-      }
-
       sendMessage(content);
-
-      return {
-        conversationId: conversation.id,
-        content: content,
-      };
+      return { conversationId: conversation.id, content };
     },
     onSuccess: (data) => {
       generateConversationTitle(data.conversationId, data.content)
         .then((title) => {
           if (!title) return;
-          if (isLocalTextBackend()) {
-            void apiPatchConversation(data.conversationId, { title });
-            queryClient.invalidateQueries({
-              queryKey: ['conversations'],
-            });
-            queryClient.setQueryData(
-              ['conversation', data.conversationId],
-              (oldConversation: Conversation) => ({
-                ...oldConversation,
-                title,
-              }),
-            );
-            return;
-          }
-          supabase
-            .from('conversations')
-            .update({ title })
-            .eq('id', data.conversationId)
-            .then(() => {
-              queryClient.invalidateQueries({
-                queryKey: ['conversations'],
-              });
-
-              queryClient.setQueryData(
-                ['conversation', data.conversationId],
-                (oldConversation: Conversation) => ({
-                  ...oldConversation,
-                  title,
-                }),
-              );
-            });
+          void apiPatchConversation(data.conversationId, { title });
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          queryClient.setQueryData(
+            ['conversation', data.conversationId],
+            (oldConversation: Conversation) => ({
+              ...oldConversation,
+              title,
+            }),
+          );
         })
         .catch((error) => {
           console.error('Error generating title:', error);
@@ -198,7 +80,7 @@ export function PromptView() {
       navigate(`/editor/${data.conversationId}`);
     },
     onError: (error) => {
-      Sentry.captureException(error);
+      console.error(error);
       toast({
         title: 'Error',
         description:
@@ -207,6 +89,9 @@ export function PromptView() {
       });
     },
   });
+
+  const firstName =
+    user?.email?.split('@')[0]?.trim().split(/\s+/)[0] ?? '';
 
   return (
     <div
@@ -224,22 +109,6 @@ export function PromptView() {
             'rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.1)]',
         )}
       >
-        {!user && (
-          <div className="fixed right-4 top-4 z-10 flex flex-row gap-2">
-            <Button
-              variant="light"
-              onClick={() => navigate('/signup')}
-              className="w-auto"
-            >
-              Sign Up
-            </Button>
-            <Button onClick={() => navigate('/signin')} className="w-auto">
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign In
-            </Button>
-          </div>
-        )}
-
         <main className="flex h-full w-full flex-col items-center justify-center px-4 md:px-8">
           <div className="mx-auto flex max-w-3xl flex-col items-center justify-center">
             <h1
@@ -255,94 +124,15 @@ export function PromptView() {
           </div>
           <div className="flex w-full flex-col items-center">
             <div className="w-full max-w-3xl space-y-4 pb-12">
-              <SelectedItemsContext.Provider
-                value={{ images, setImages, mesh, setMesh }}
-              >
-                <TextAreaChat
-                  onSubmit={handleGenerate}
-                  conversation={{
-                    id: newConversationId,
-                    user_id: user?.id ?? '',
-                  }}
-                  onFocus={() => {
-                    if (!user) {
-                      navigate('/signin');
-                      return;
-                    }
-                  }}
-                  placeholder="Start building with Adam..."
-                  type={type}
-                  disabled={limitReached}
-                  model={model}
-                  setModel={setModel}
-                  showPromptGenerator={true}
-                  showFullLabels={true}
-                  onTypeChange={handleTypeChange}
-                />
-              </SelectedItemsContext.Provider>
-              <div className="relative">
-                {isLoading && (
-                  <div className="absolute left-0 right-0 top-0">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-adam-blue border-t-transparent" />
-                  </div>
-                )}
-                {!isLoading && user && limitReached && (
-                  <div className="absolute left-0 right-0 top-0">
-                    <LimitReachedMessage />
-                  </div>
-                )}
-                {!isLoading && user && lowPrompts && !limitReached && (
-                  <div className="absolute left-0 right-0 top-0">
-                    <LowPromptsWarningMessage tokensRemaining={totalTokens} />
-                  </div>
-                )}
-              </div>
-              {!isLoading && user && !limitReached && !lowPrompts && (
-                <div className="flex justify-center">
-                  <a
-                    href="https://cad.onshape.com/appstore/apps/Design%20&%20Documentation/690a8dc864e816c112aa66a0"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      try {
-                        posthog.capture('onshape_banner_click', {
-                          location: 'prompt_view',
-                        });
-                      } catch {
-                        // Analytics failures (e.g. blocked by ad-blocker)
-                        // must never block the link's navigation.
-                      }
-                    }}
-                    className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-adam-text-secondary transition-colors hover:border-adam-blue/40 hover:bg-adam-blue/10 hover:text-adam-text-primary"
-                  >
-                    <span>
-                      Try our{' '}
-                      <span className="font-medium text-adam-blue">
-                        Onshape extension
-                      </span>
-                    </span>
-                    <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                  </a>
-                </div>
-              )}
-              {!user && (
-                <p className="text-center text-sm text-gray-500">
-                  <Link
-                    to="/signin"
-                    className="!text-adam-blue hover:!text-adam-blue/80"
-                  >
-                    Sign in
-                  </Link>{' '}
-                  or{' '}
-                  <Link
-                    to="/signup"
-                    className="!text-adam-blue hover:!text-adam-blue/80"
-                  >
-                    create an account
-                  </Link>{' '}
-                  to start generating
-                </p>
-              )}
+              <TextAreaChat
+                onSubmit={handleGenerate}
+                conversation={{
+                  id: newConversationId,
+                  user_id: user?.id ?? '',
+                }}
+                model={model}
+                setModel={setModel}
+              />
             </div>
           </div>
         </main>

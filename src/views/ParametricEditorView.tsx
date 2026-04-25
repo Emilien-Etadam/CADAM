@@ -15,23 +15,17 @@ import {
   useUpdateMessageOptimisticMutation,
   useChangeRatingMutation,
 } from '@/services/messageService';
-import { useAuth } from '@/contexts/AuthContext';
 import Tree from '@shared/Tree';
-import { useRequestCancellation } from '@/hooks/useRequestCancellation';
-import posthog from 'posthog-js';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export function ParametricEditorView() {
   const { conversation, updateConversationAsync } = useConversation();
   const queryClient = useQueryClient();
   const { currentMessage, setCurrentMessage } = useCurrentMessage();
-  const { billing } = useAuth();
-  const totalTokens = billing?.tokens.total ?? 0;
   const [currentOutput, setCurrentOutput] = useState<Blob | undefined>();
   // Brand fallback color used when OFF parsing fails and we drop back to
   // the single-color STL mesh.
   const color = '#00A6FF';
-  const { cancelRequest } = useRequestCancellation();
   const isTabletOrMobile = useMediaQuery('(max-width: 1024px)');
 
   // Track the current processing message ID for cancellation
@@ -96,15 +90,8 @@ export function ParametricEditorView() {
   }, [lastMessage, isLoading]);
 
   const stopGenerating = useCallback(async () => {
-    if (currentProcessingMessageRef.current) {
-      try {
-        await cancelRequest(currentProcessingMessageRef.current);
-        currentProcessingMessageRef.current = null;
-      } catch (error) {
-        console.error('Failed to cancel request:', error);
-      }
-    }
-  }, [cancelRequest]);
+    currentProcessingMessageRef.current = null;
+  }, []);
 
   useEffect(() => {
     setCurrentMessage(null);
@@ -165,17 +152,9 @@ export function ParametricEditorView() {
 
   const sendMessage = useCallback(
     (content: Content) => {
-      posthog.capture('message_sent', {
-        type: 'parametric',
-        model_name: conversation.settings?.model ?? 'none',
-        text: content.text ?? '',
-        image_count: content.images?.length ?? 0,
-        mesh_count: content.mesh ? 1 : 0,
-        conversation_id: conversation.id,
-      });
       sendMessageMutation(content);
     },
-    [sendMessageMutation, conversation.id, conversation.settings?.model],
+    [sendMessageMutation],
   );
 
   const fixError = useCallback(
@@ -205,7 +184,7 @@ export function ParametricEditorView() {
       fixError={currentMessage?.id === lastMessage?.id ? fixError : undefined}
       changeRating={changeRating}
       restoreMessage={restoreMessage}
-      limitReached={totalTokens <= 0}
+      limitReached={false}
     />
   );
 }

@@ -5,9 +5,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { isLocalTextBackend } from '@/lib/localBackend';
-import { getEffectiveUserId } from '@/lib/localUser';
-import { supabase } from '@/lib/supabase';
 import {
   apiDeleteConversation,
   apiListHistoryConversations,
@@ -17,8 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Sentry from '@sentry/react';
-import { Content, Conversation, ConversationSettings } from '@shared/types';
+import { Content, Conversation } from '@shared/types';
 import { HistoryConversation } from '../types/misc.ts';
 import { ConversationCard } from '@/components/history/ConversationCard';
 import { VisualCard } from '@/components/history/VisualCard';
@@ -45,56 +41,16 @@ export function HistoryView() {
 
   const conversationQuery = useQuery<HistoryConversation[]>({
     queryKey: ['conversations'],
-    enabled: !!user || isLocalTextBackend(),
+    enabled: !!user,
     queryFn: async () => {
-      if (isLocalTextBackend()) {
-        const conversationsData = await apiListHistoryConversations();
-        const formattedConversations = conversationsData.map((conv) => {
-          const rawContent = conv.first_message_content;
-          const firstMessageContent =
-            typeof rawContent === 'object' && rawContent !== null
-              ? (rawContent as Content)
-              : { text: '' };
-          const messageCount = conv.message_count ?? 0;
-
-          const formattedFirstMessage = {
-            text: firstMessageContent.text ?? '',
-            images: firstMessageContent.images ?? [],
-          };
-
-          return {
-            ...conv,
-            created_at: conv.created_at || new Date().toISOString(),
-            updated_at:
-              conv.updated_at || conv.created_at || new Date().toISOString(),
-            message_count: messageCount,
-            first_message: formattedFirstMessage as Content,
-          };
-        });
-        return formattedConversations;
-      }
-
-      const { data: conversationsData, error: conversationsError } =
-        await supabase
-          .from('conversations')
-          .select(
-            `*, first_message:messages(content), messagesCount:messages(count)`,
-          )
-          .eq('user_id', getEffectiveUserId(user?.id) ?? '')
-          .order('updated_at', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(1, { referencedTable: 'first_message' })
-          .overrideTypes<Array<{ settings: ConversationSettings }>>();
-
-      if (conversationsError) throw conversationsError;
-
-      const formattedConversations = conversationsData.map((conv) => {
-        const rawContent = conv.first_message?.[0]?.content;
+      const conversationsData = await apiListHistoryConversations();
+      return conversationsData.map((conv) => {
+        const rawContent = conv.first_message_content;
         const firstMessageContent =
           typeof rawContent === 'object' && rawContent !== null
             ? (rawContent as Content)
             : { text: '' };
-        const messageCount = conv.messagesCount?.[0]?.count ?? 0;
+        const messageCount = conv.message_count ?? 0;
 
         const formattedFirstMessage = {
           text: firstMessageContent.text ?? '',
@@ -110,8 +66,6 @@ export function HistoryView() {
           first_message: formattedFirstMessage as Content,
         };
       });
-
-      return formattedConversations;
     },
   });
 
@@ -127,28 +81,7 @@ export function HistoryView() {
 
   const deleteConversation = useMutation({
     mutationFn: async (conversationId: string) => {
-      if (isLocalTextBackend()) {
-        await apiDeleteConversation(conversationId);
-        return;
-      }
-      const { error } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', conversationId);
-
-      if (error) throw error;
-
-      supabase.storage
-        .from('images')
-        .list(`${user?.id}/${conversationId}`)
-        .then(({ data: list }) => {
-          if (list) {
-            const filesToRemove = list.map(
-              (file) => `${user?.id}/${conversationId}/${file.name}`,
-            );
-            supabase.storage.from('images').remove(filesToRemove);
-          }
-        });
+      await apiDeleteConversation(conversationId);
     },
     onMutate: async (conversationId) => {
       await queryClient.cancelQueries({ queryKey: ['conversations'] });
@@ -189,16 +122,7 @@ export function HistoryView() {
       conversationId: string;
       newTitle: string;
     }) => {
-      if (isLocalTextBackend()) {
-        await apiPatchConversation(conversationId, { title: newTitle });
-        return;
-      }
-      const { error } = await supabase
-        .from('conversations')
-        .update({ title: newTitle })
-        .eq('id', conversationId);
-
-      if (error) throw error;
+      await apiPatchConversation(conversationId, { title: newTitle });
     },
     onMutate: async ({ conversationId, newTitle }) => {
       await queryClient.cancelQueries({ queryKey: ['conversations'] });
@@ -243,16 +167,7 @@ export function HistoryView() {
       conversationId: string;
       newPrivacy: 'public' | 'private';
     }) => {
-      if (isLocalTextBackend()) {
-        await apiPatchConversation(conversationId, { privacy: newPrivacy });
-        return;
-      }
-      const { error } = await supabase
-        .from('conversations')
-        .update({ privacy: newPrivacy })
-        .eq('id', conversationId);
-
-      if (error) throw error;
+      await apiPatchConversation(conversationId, { privacy: newPrivacy });
     },
     onMutate: async ({ conversationId, newPrivacy }) => {
       await queryClient.cancelQueries({ queryKey: ['conversations'] });
@@ -464,7 +379,7 @@ export function HistoryView() {
                       'MMMM d, yyyy',
                     );
                   } catch (error) {
-                    Sentry.captureException(error, { extra: { date } });
+                    console.error('Date format error', date, error);
                   }
 
                   return (

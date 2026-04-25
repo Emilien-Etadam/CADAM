@@ -21,7 +21,7 @@ import {
   shouldShowNormalIntensity,
 } from '@/constants/meshConstants';
 import { CreativeModel, Model } from '@shared/types';
-import posthog from 'posthog-js';
+import { phCapture } from '@/lib/localTelemetry';
 
 interface LightingControlsProps {
   brightness: number;
@@ -121,7 +121,7 @@ export function LightingControls({
       // Reset to current brightness if input is invalid
       setBrightnessInput(brightness.toFixed(0));
     }
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'brightness_changed',
       value,
     });
@@ -136,7 +136,7 @@ export function LightingControls({
       // Reset to current roughness if input is invalid
       setRoughnessInput(roughness.toFixed(0));
     }
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'roughness_changed',
       value,
     });
@@ -151,7 +151,7 @@ export function LightingControls({
       // Reset to current normal intensity if input is invalid
       setNormalIntensityInput(normalIntensity.toFixed(0));
     }
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'normal_intensity_changed',
       value,
     });
@@ -173,7 +173,7 @@ export function LightingControls({
     if (showNormalIntensityControl) {
       onNormalIntensityChange(DEFAULT_NORMAL_INTENSITY);
     }
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'reset',
       modelQuality,
       hasNormalIntensity: showNormalIntensityControl,
@@ -183,7 +183,7 @@ export function LightingControls({
   // Individual reset functions
   const resetBrightness = () => {
     onBrightnessChange(defaultBrightness);
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'brightness_reset',
       modelQuality,
     });
@@ -191,7 +191,7 @@ export function LightingControls({
 
   const resetRoughness = () => {
     onRoughnessChange(DEFAULT_ROUGHNESS);
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'roughness_reset',
       modelQuality,
     });
@@ -199,7 +199,7 @@ export function LightingControls({
 
   const resetNormalIntensity = () => {
     onNormalIntensityChange(DEFAULT_NORMAL_INTENSITY);
-    posthog.capture('lighting_controls', {
+    phCapture('lighting_controls', {
       event: 'normal_intensity_reset',
       modelQuality,
     });

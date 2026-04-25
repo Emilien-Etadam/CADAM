@@ -31,8 +31,6 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { HistoryConversation } from '../../types/misc.ts';
 import { GoodEarth } from '../icons/ui/GoodEarth';
-import { isLocalTextBackend } from '@/lib/localBackend';
-import { supabase } from '@/lib/supabase';
 import { apiVisualAssistantMessages } from '@/services/localDataApi';
 import { useOpenSCAD } from '@/hooks/useOpenSCAD';
 import { Canvas } from '@react-three/fiber';
@@ -130,20 +128,7 @@ export function VisualCard({
   useEffect(() => {
     const fetchLastArtifact = async () => {
       try {
-        let messages: { content: unknown }[] | null = null;
-        if (isLocalTextBackend()) {
-          messages = await apiVisualAssistantMessages(conversation.id);
-        } else {
-          const { data, error } = await supabase
-            .from('messages')
-            .select('content')
-            .eq('conversation_id', conversation.id)
-            .eq('role', 'assistant')
-            .order('created_at', { ascending: false })
-            .limit(50);
-          if (error) throw error;
-          messages = data;
-        }
+        const messages = await apiVisualAssistantMessages(conversation.id);
 
         const messageWithArtifact = messages?.find(
           (msg) =>

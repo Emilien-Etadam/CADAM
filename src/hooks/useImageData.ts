@@ -1,114 +1,51 @@
-import { useConversation } from '@/contexts/ConversationContext';
-import { supabase } from '@/lib/supabase';
-import { Prompt } from '@shared/types';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import type { Prompt } from '@shared/types';
 
-export function useImageData(id: string) {
-  const { conversation } = useConversation();
+/** Minimal row shape for UI components that still expect cloud image metadata. */
+export type ImageDataRow = {
+  id: string;
+  status?: 'pending' | 'success' | 'failure';
+  prompt?: Prompt;
+  created_at?: string;
+};
 
-  const dataQuery = useQuery({
-    queryKey: ['imageData', conversation.user_id, conversation.id, id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('images')
-        .select('*')
-        .eq('id', id)
-        .single()
-        .overrideTypes<{
-          prompt: Prompt;
-        }>();
+export type ImageUrlRow = {
+  id: string;
+  url: string;
+};
 
-      if (error) {
-        throw error;
-      }
-
-      return data;
-    },
-    refetchInterval: (query) => {
-      if (query.state.data?.status === 'pending') {
-        return 10 * 1000;
-      }
-      return false;
-    },
+/** Local-only: no image pipeline; queries stay disabled. */
+export function useImageData(_id: string): {
+  data: UseQueryResult<ImageDataRow | null, Error>;
+  url: UseQueryResult<ImageUrlRow | null, Error>;
+} {
+  const dataQuery = useQuery<ImageDataRow | null, Error>({
+    queryKey: ['imageData', 'disabled'],
+    enabled: false,
+    queryFn: async () => null,
   });
-
-  const urlQuery = useQuery({
-    queryKey: ['image', conversation.user_id, conversation.id, id],
-    enabled: dataQuery.data?.status === 'success',
-    queryFn: async () => {
-      const reader = new FileReader();
-      const { data } = await supabase.storage
-        .from('images')
-        .download(`${conversation.user_id}/${conversation.id}/${id}`);
-      if (!data) {
-        throw new Error('Failed to download image');
-      }
-      const urlPromise = new Promise((resolve) => {
-        reader.onload = () => {
-          resolve(reader.result as string);
-        };
-      });
-      reader.readAsDataURL(data);
-      const url = (await urlPromise) as string;
-      return { id, url };
-    },
+  const urlQuery = useQuery<ImageUrlRow | null, Error>({
+    queryKey: ['image', 'disabled'],
+    enabled: false,
+    queryFn: async () => null,
   });
-
   return { data: dataQuery, url: urlQuery };
 }
 
-export function useImagesData(ids: string[]) {
-  const { conversation } = useConversation();
-
+export function useImagesData(_ids: string[]) {
   const dataQueries = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ['imageData', conversation.user_id, conversation.id, id],
-      enabled: !!id,
-      queryFn: async () => {
-        const { data, error } = await supabase
-          .from('images')
-          .select('*')
-          .eq('id', id)
-          .single()
-          .overrideTypes<{
-            prompt: Prompt;
-          }>();
-
-        if (error) {
-          throw error;
-        }
-
-        return data;
-      },
+    queries: _ids.map((id) => ({
+      queryKey: ['imageData', id, 'disabled'],
+      enabled: false,
+      queryFn: async (): Promise<ImageDataRow | null> => null,
     })),
-  });
-
+  }) as UseQueryResult<ImageDataRow | null, Error>[];
   const urlQueries = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ['image', conversation.user_id, conversation.id, id],
-      enabled: dataQueries.some(
-        (query) =>
-          query.data && query.data.id === id && query.data.status === 'success',
-      ),
-      queryFn: async () => {
-        const reader = new FileReader();
-        const { data } = await supabase.storage
-          .from('images')
-          .download(`${conversation.user_id}/${conversation.id}/${id}`);
-        if (!data) {
-          throw new Error('Failed to download image');
-        }
-        const urlPromise = new Promise((resolve) => {
-          reader.onload = () => {
-            resolve(reader.result as string);
-          };
-        });
-        reader.readAsDataURL(data);
-        const url = (await urlPromise) as string;
-        return { id, url };
-      },
+    queries: _ids.map((id) => ({
+      queryKey: ['image', id, 'disabled'],
+      enabled: false,
+      queryFn: async (): Promise<ImageUrlRow | null> => null,
     })),
-  });
-
+  }) as UseQueryResult<ImageUrlRow | null, Error>[];
   return { data: dataQueries, url: urlQueries };
 }

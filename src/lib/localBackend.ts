@@ -1,7 +1,7 @@
-export function isLocalTextBackend(): boolean {
-  return import.meta.env.VITE_LOCAL_BACKEND === 'true';
-}
-
-export function getLocalBackendBaseUrl(): string {
-  return import.meta.env.VITE_LOCAL_BACKEND_URL ?? 'http://127.0.0.1:8787';
+/**
+ * Base URL for the local API (empty = same-origin, Vite proxy /api -> server).
+ */
+export function getApiBaseUrl(): string {
+  const u = (import.meta.env.VITE_API_BASE_URL ?? '').trim();
+  return u.replace(/\/$/, '');
 }

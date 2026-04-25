@@ -8,7 +8,6 @@ import {
   Pencil,
   X,
   Wrench,
-  Box,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -20,10 +19,6 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useConversation } from '@/contexts/ConversationContext';
-import { useIsMobile } from '@/hooks/useIsMobile';
-import { useCurrentMessage } from '@/contexts/CurrentMessageContext';
-import { ImageViewer } from '@/components/ImageViewer';
-import { MeshImagePreview } from '@/components/viewer/MeshImagePreview';
 import { TreeNode } from '@shared/Tree';
 import { UserAvatar } from '@/components/chat/UserAvatar';
 
@@ -142,10 +137,6 @@ export function UserMessage({
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1">
-              <UserMessageMeshViewer message={message} />
-              <UserMessageImagesViewer message={message} />
-            </div>
             {(isEditing || (input && input.length > 0)) && (
               <div
                 className={cn(
@@ -331,106 +322,3 @@ function BranchNavigation({
   );
 }
 
-function UserMessageMeshViewer({ message }: { message: Message }) {
-  const { currentMessage, setCurrentMessage } = useCurrentMessage();
-
-  if (!message.content.mesh) {
-    return null;
-  }
-
-  return (
-    <div className="relative">
-      <div
-        onClick={() => {
-          if (
-            currentMessage &&
-            message.id === currentMessage?.id &&
-            currentMessage?.content.mesh === message.content.mesh
-          ) {
-            setCurrentMessage(null);
-          } else {
-            // Only set the mesh part of the message, not the images
-            setCurrentMessage({
-              ...message,
-              content: {
-                mesh: message.content.mesh,
-              },
-            });
-          }
-        }}
-        className={cn(
-          'h-24 w-24 cursor-pointer overflow-hidden rounded-md',
-          currentMessage?.id === message.id &&
-            currentMessage?.content.mesh === message.content.mesh &&
-            'outline outline-2 outline-adam-blue',
-        )}
-      >
-        <MeshImagePreview meshId={message.content.mesh.id} />
-        <div className="absolute bottom-1 right-1 rounded-full border border-adam-neutral-500 bg-adam-neutral-500 text-white transition-colors duration-200 hover:border-adam-neutral-700 hover:bg-adam-neutral-700">
-          <Box className="h-4 w-4 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * UserMessageImagesViewer is a component that displays a grid of images from a message.
- * It's used within UserMessage to show any images attached to a user's message.
- *
- * Features:
- * - Displays images in a responsive grid layout
- * - Supports hover effects to highlight images
- * - Allows clicking images to open them in a larger view
- * - Integrates with CurrentMessageContext to track which image is being viewed
- *
- * @param message - The message object containing the images to display
- */
-export function UserMessageImagesViewer({ message }: { message: Message }) {
-  const { currentMessage, setCurrentMessage } = useCurrentMessage();
-  const isMobile = useIsMobile();
-
-  if (!message.content.images) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {message.content.images.map((image: string, index: number) => (
-        <div
-          key={`${image}-${index}`}
-          onClick={() => {
-            if (
-              currentMessage &&
-              message.id === currentMessage?.id &&
-              currentMessage?.content.index === index
-            ) {
-              setCurrentMessage(null);
-            } else {
-              // Only set the images part of the message, not the mesh
-              setCurrentMessage({
-                ...message,
-                content: {
-                  images: message.content.images,
-                  index,
-                },
-              });
-            }
-          }}
-          className="h-24 w-24"
-        >
-          <ImageViewer
-            image={image}
-            clickable={!isMobile}
-            className={cn(
-              'aspect-square cursor-pointer',
-              currentMessage?.id === message.id &&
-                currentMessage?.content.index === index &&
-                'outline outline-2 outline-adam-blue',
-            )}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}

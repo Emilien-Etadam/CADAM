@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { useNavigate, useRouteError } from 'react-router-dom';
-import * as Sentry from '@sentry/react';
 import { useEffect } from 'react';
 
 export function ErrorView() {
@@ -8,7 +7,7 @@ export function ErrorView() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    Sentry.captureException(error);
+    console.error('Route error', error);
   }, [error]);
 
   return (

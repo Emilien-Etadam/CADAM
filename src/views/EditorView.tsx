@@ -1,12 +1,9 @@
-import { isLocalTextBackend } from '@/lib/localBackend';
 import { getEffectiveUserId } from '@/lib/localUser';
-import { supabase } from '@/lib/supabase';
 import { apiGetConversation, apiUpdateConversation } from '@/services/localDataApi';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { CreativeEditorView } from './CreativeEditorView';
 import { ParametricEditorView } from './ParametricEditorView';
 import { ConversationContext } from '@/contexts/ConversationContext';
 import { Conversation, Message } from '@shared/types';
@@ -31,46 +28,13 @@ export default function EditorView() {
       if (!conversationId) {
         throw new Error('Conversation ID is required');
       }
-      if (isLocalTextBackend()) {
-        return apiGetConversation(conversationId);
-      }
-      const uid = getEffectiveUserId(user?.id);
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('id', conversationId)
-        .eq('user_id', uid ?? '')
-        .limit(1)
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as Conversation;
+      return apiGetConversation(conversationId);
     },
   });
 
   const { mutate: updateConversation, mutateAsync: updateConversationAsync } =
     useMutation({
-      mutationFn: async (conversation: Conversation) => {
-        if (isLocalTextBackend()) {
-          return apiUpdateConversation(conversation);
-        }
-        const { data, error } = await supabase
-          .from('conversations')
-          .update(conversation)
-          .eq('id', conversation.id)
-          .select()
-          .single()
-          .overrideTypes<Conversation>();
-
-        if (error) {
-          throw error;
-        }
-
-        return data;
-      },
+      mutationFn: async (c: Conversation) => apiUpdateConversation(c),
       onMutate(conversation) {
         const oldConversation = queryClient.getQueryData<Conversation>([
           'conversation',
@@ -86,9 +50,7 @@ export default function EditorView() {
         queryClient.invalidateQueries({
           queryKey: ['conversation', conversationId],
         });
-        queryClient.invalidateQueries({
-          queryKey: ['conversations'],
-        });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
       },
       onError(_error, conversation, context) {
         queryClient.setQueryData(
@@ -121,12 +83,19 @@ export default function EditorView() {
     );
   }
 
+  const uid = getEffectiveUserId(user?.id);
+  if (uid && conversation.user_id && conversation.user_id !== uid) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center bg-adam-bg-secondary-dark text-adam-text-primary">
+        <span className="text-2xl font-medium">403</span>
+        <span className="text-sm">Access denied</span>
+      </div>
+    );
+  }
+
   return (
     <CurrentMessageContext.Provider
-      value={{
-        currentMessage,
-        setCurrentMessage,
-      }}
+      value={{ currentMessage, setCurrentMessage }}
     >
       <ConversationContext.Provider
         value={{
@@ -138,11 +107,7 @@ export default function EditorView() {
         <SelectedItemsContext.Provider
           value={{ images, setImages, mesh, setMesh }}
         >
-          {conversation.type === 'creative' ? (
-            <CreativeEditorView />
-          ) : (
-            <ParametricEditorView />
-          )}
+          <ParametricEditorView />
         </SelectedItemsContext.Provider>
       </ConversationContext.Provider>
     </CurrentMessageContext.Provider>

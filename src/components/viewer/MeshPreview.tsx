@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { CreativeLoadingBar } from './CreativeLoadingBar';
 import { LightingControls } from './LightingControls';
 
-import posthog from 'posthog-js';
+import { phCapture } from '@/lib/localTelemetry';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
 import { useMeshData } from '@/hooks/useMeshData';
@@ -747,7 +747,7 @@ export function MeshPreview({ meshId }: { meshId: string }) {
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
-    posthog.capture('view_mode_changed', {
+    phCapture('view_mode_changed', {
       mode,
       meshId,
     });
