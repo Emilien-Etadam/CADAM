@@ -46,6 +46,7 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useMutation } from '@tanstack/react-query';
 import { getLocalBackendBaseUrl, isLocalTextBackend } from '@/lib/localBackend';
+import { makeUuid } from '@/lib/uuid';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ModelSelector } from '@/components/ModelSelector';
@@ -960,7 +961,7 @@ function TextAreaChat({
     }
 
     filteredMeshes.forEach(async (file) => {
-      const tempId = crypto.randomUUID();
+      const tempId = makeUuid();
       const fileType = getMeshFileType(file.name);
       setMesh({ id: tempId, isUploading: true, source: 'upload', fileType });
       try {
@@ -976,7 +977,7 @@ function TextAreaChat({
           // Generate multi-angle renders and upload as images
           const renders = await renderMultipleAngles(geometry, boundingBox);
           for (const renderBlob of renders) {
-            const renderId = crypto.randomUUID();
+            const renderId = makeUuid();
             const renderFile = new File(
               [renderBlob],
               `render-${renderId}.png`,
@@ -1031,7 +1032,7 @@ function TextAreaChat({
 
     // Upload each valid image immediately
     filteredImages.forEach(async (file) => {
-      const tempId = crypto.randomUUID();
+      const tempId = makeUuid();
       const url = URL.createObjectURL(file);
       setImages((prevImages) => [
         ...prevImages,

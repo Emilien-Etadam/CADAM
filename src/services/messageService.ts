@@ -1,6 +1,7 @@
 import { useConversation } from '@/contexts/ConversationContext';
 import { getLocalBackendBaseUrl, isLocalTextBackend } from '@/lib/localBackend';
 import { supabase } from '@/lib/supabase';
+import { makeUuid } from '@/lib/uuid';
 import {
   apiInsertMessage,
   apiListMessages,
@@ -170,7 +171,7 @@ export function useCreativeChatMutation({
       messageId: string;
       conversationId: string;
     }) => {
-      const newMessageId = crypto.randomUUID();
+      const newMessageId = makeUuid();
       let initialized = false;
 
       // Start streaming request
@@ -376,7 +377,7 @@ export function useParametricChatMutation({
       messageId: string;
       conversationId: string;
     }) => {
-      const newMessageId = crypto.randomUUID();
+      const newMessageId = makeUuid();
       let initialized = false;
 
       const response = await fetch(

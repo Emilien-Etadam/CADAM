@@ -1,7 +1,6 @@
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY =
-  import.meta.env.VITE_POSTHOG_PROJECT_KEY ?? import.meta.env.VITE_POSTHOG_KEY;
+const POSTHOG_KEY = (import.meta.env.VITE_POSTHOG_PROJECT_KEY ?? '').trim();
 const POSTHOG_HOST = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jackson-pollock`
   : import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
@@ -10,7 +9,6 @@ let isInitialized = false;
 
 export const initPostHog = () => {
   if (!POSTHOG_KEY) {
-    console.warn('PostHog key not configured. Analytics disabled.');
     return;
   }
 

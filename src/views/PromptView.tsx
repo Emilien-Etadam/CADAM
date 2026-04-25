@@ -16,6 +16,7 @@ import { LimitReachedMessage } from '@/components/LimitReachedMessage';
 import { LowPromptsWarningMessage } from '@/components/LowPromptsWarningMessage';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
+import { makeUuid } from '@/lib/uuid';
 import { SelectedItemsContext } from '@/contexts/SelectedItemsContext';
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
@@ -61,7 +62,7 @@ export function PromptView() {
   const [mesh, setMesh] = useState<MessageItem | null>(null);
 
   const newConversationId = useMemo(() => {
-    return crypto.randomUUID();
+    return makeUuid();
   }, []);
 
   const lowPrompts = useMemo(() => {
