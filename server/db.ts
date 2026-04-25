@@ -21,11 +21,11 @@ export function devUser() {
   };
 }
 
-export async function ensureDevUser() {
+export async function ensureLocalUser() {
   const u = devUser();
   await pool.query(
     `INSERT INTO users (id, email) VALUES ($1, $2)
-     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
+     ON CONFLICT (id) DO NOTHING`,
     [u.id, u.email],
   );
 }

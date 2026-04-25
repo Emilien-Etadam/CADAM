@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { pool, ensureDevUser, corsHeaders, devUser } from './db.js';
+import { pool, ensureLocalUser, corsHeaders, devUser } from './db.js';
 import { handleParametricChatRequest } from './parametricChat.js';
 import { handleTitleGeneratorRequest } from './titleGenerator.js';
 import { handlePromptGeneratorRequest } from './promptGenerator.js';
@@ -63,7 +63,7 @@ createServer(async (req, res) => {
   }
 
   try {
-    await ensureDevUser();
+    await ensureLocalUser();
   } catch (e) {
     console.error(e);
     res.writeHead(500, { ...corsHeaders, 'Content-Type': 'application/json' });

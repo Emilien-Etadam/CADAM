@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { buildLocalSession, buildLocalUser } from '@/lib/localAuth';
+import { isLocalTextBackend } from '@/lib/localBackend';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { AuthContext, type BillingStatus, getLevel } from './AuthContext';
+
+const LOCAL_DEV_BILLING: BillingStatus = {
+  user: { hasTrialed: false },
+  subscription: null,
+  tokens: {
+    free: 100_000,
+    subscription: 0,
+    purchased: 0,
+    total: 100_000,
+  },
+};
 
 const ensurePermission = async () => {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -17,17 +30,27 @@ const ensurePermission = async () => {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(
-    JSON.parse(localStorage.getItem('session') ?? 'null'),
+  const [session, setSession] = useState<Session | null>(() =>
+    isLocalTextBackend()
+      ? buildLocalSession()
+      : JSON.parse(localStorage.getItem('session') ?? 'null'),
   );
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() =>
+    isLocalTextBackend() ? buildLocalUser() : null,
+  );
+  const [authBootstrapping, setAuthBootstrapping] = useState(
+    () => !isLocalTextBackend(),
+  );
   const navigate = useNavigate();
   const posthogSent = useRef(false);
   const queryClient = useQueryClient();
 
   // Initialize auth state and set up session listener
   useEffect(() => {
+    if (isLocalTextBackend()) {
+      return;
+    }
+
     const initializeAuth = async () => {
       try {
         const {
@@ -37,11 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('session', JSON.stringify(session));
         setUser(session?.user ?? null);
       } finally {
-        setIsLoading(false);
+        setAuthBootstrapping(false);
       }
     };
 
-    initializeAuth();
+    void initializeAuth();
 
     const {
       data: { subscription },
@@ -62,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // truth; no local realtime channel anymore.
   const { data: billing, isLoading: isBillingLoading } = useQuery({
     queryKey: ['billing', 'status'],
-    enabled: !!user,
+    enabled: !!user && !isLocalTextBackend(),
     refetchInterval: 30000,
     queryFn: async (): Promise<BillingStatus> => {
       const { data, error } = await supabase.functions.invoke('billing-status');
@@ -84,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !isLocalTextBackend(),
   });
 
   // Initialize notifications preference once on first render after profile loads
@@ -94,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Set up real-time subscription for meshes table to update meshData immediately and notify the user
   useEffect(() => {
-    if (!user) {
+    if (!user || isLocalTextBackend()) {
       return;
     }
 
@@ -152,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Track user in PostHog once we have all their data
   useEffect(() => {
     if (
+      !isLocalTextBackend() &&
       user &&
       !posthogSent.current &&
       !isBillingLoading &&
@@ -168,6 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, isBillingLoading, billing, profile, isProfileLoading]);
 
   const signIn = async (email: string, password: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -176,6 +203,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -185,11 +215,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
   const signInWithMagicLink = async (email: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: true },
@@ -198,6 +234,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const verifyOtp = async (email: string, token: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.verifyOtp({
       email,
       token,
@@ -207,11 +246,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) throw error;
   };
 
   const updatePassword = async (password: string) => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
   };
@@ -221,9 +266,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         session,
         user,
-        billing: billing ?? null,
-        isLoading:
-          isLoading || (!!user && (isBillingLoading || isProfileLoading)),
+        billing: isLocalTextBackend() ? LOCAL_DEV_BILLING : (billing ?? null),
+        isLoading: isLocalTextBackend()
+          ? false
+          : authBootstrapping ||
+            (!!user && (isBillingLoading || isProfileLoading)),
         signIn,
         signUp,
         signInWithMagicLink,

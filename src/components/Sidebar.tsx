@@ -71,6 +71,9 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
   });
 
   const handleSignOut = async () => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     try {
       await signOut();
       navigate('/signin');
@@ -388,18 +391,24 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
                       <span>Settings</span>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => sidebarNavigate('/subscription')}
-                  >
-                    <Crown className="mr-2 h-4 w-4" />
-                    <span>Subscriptions</span>
-                  </DropdownMenuItem>
+                  {!isLocalTextBackend() && (
+                    <DropdownMenuItem
+                      onClick={() => sidebarNavigate('/subscription')}
+                    >
+                      <Crown className="mr-2 h-4 w-4" />
+                      <span>Subscriptions</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4 text-adam-text-primary" />
-                  <span className="text-adam-text-primary">Sign out</span>
-                </DropdownMenuItem>
+                {!isLocalTextBackend() && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4 text-adam-text-primary" />
+                      <span className="text-adam-text-primary">Sign out</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

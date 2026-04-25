@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { isLocalTextBackend } from '@/lib/localBackend';
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,7 +24,7 @@ export function useProfile() {
 
       return data;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !isLocalTextBackend(),
   });
 }
 

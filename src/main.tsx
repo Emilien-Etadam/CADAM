@@ -32,6 +32,7 @@ import { Layout } from './components/Layout.tsx';
 import ShareView from './views/ShareView.tsx';
 import EditorView from './views/EditorView.tsx';
 import SettingsView from './views/SettingsView.tsx';
+import { isLocalTextBackend } from './lib/localBackend';
 import { isSupabaseConfigMissing } from './lib/supabase.ts';
 
 Sentry.init({
@@ -68,14 +69,56 @@ const router = sentryCreateBrowserRouter(
       element: <App />,
       errorElement: <ErrorView />,
       children: [
-        { path: '/signin', element: <SignInView /> },
-        { path: '/signup', element: <SignUpView /> },
-        { path: '/signup-email', element: <SignUpEmailView /> },
-        { path: '/reset-password', element: <ResetPasswordView /> },
-        { path: '/confirm-email', element: <EmailConfirmation /> },
+        {
+          path: '/signin',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <SignInView />
+          ),
+        },
+        {
+          path: '/signup',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <SignUpView />
+          ),
+        },
+        {
+          path: '/signup-email',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <SignUpEmailView />
+          ),
+        },
+        {
+          path: '/reset-password',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <ResetPasswordView />
+          ),
+        },
+        {
+          path: '/confirm-email',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <EmailConfirmation />
+          ),
+        },
         { path: '/privacy-policy', element: <PrivacyPolicyView /> },
         { path: '/terms-of-service', element: <TermsOfServiceView /> },
-        { path: '/update-password', element: <UpdatePasswordView /> },
+        {
+          path: '/update-password',
+          element: isLocalTextBackend() ? (
+            <Navigate to="/" replace />
+          ) : (
+            <UpdatePasswordView />
+          ),
+        },
         {
           element: <Layout />,
           children: [
@@ -128,7 +171,7 @@ const router = sentryCreateBrowserRouter(
 );
 
 createRoot(document.getElementById('root')!).render(
-  isSupabaseConfigMissing ? (
+  isSupabaseConfigMissing && !isLocalTextBackend() ? (
     <MissingConfig />
   ) : (
     <StrictMode>

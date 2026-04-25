@@ -1,3 +1,4 @@
+import { getLocalDevUserId } from '@/lib/localAuth';
 import { isLocalTextBackend } from './localBackend';
 
 /**
@@ -7,10 +8,7 @@ export function getEffectiveUserId(
   userId: string | undefined | null,
 ): string | null {
   if (isLocalTextBackend()) {
-    return (
-      import.meta.env.VITE_DEV_USER_ID ??
-      '00000000-0000-0000-0000-000000000001'
-    );
+    return getLocalDevUserId();
   }
   return userId ?? null;
 }

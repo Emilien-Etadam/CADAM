@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { isLocalTextBackend } from '@/lib/localBackend';
 import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
@@ -13,6 +14,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const location = useLocation();
 
   useEffect(() => {
+    if (isLocalTextBackend()) {
+      return;
+    }
     if (!isLoading && !session && !user) {
       // Capture current path for redirect after authentication
       // Only include pathname and search to avoid security issues
@@ -27,6 +31,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
       navigate(`/signin${redirectParam}`);
     }
   }, [session, user, navigate, isLoading, location.pathname, location.search]);
+
+  if (isLocalTextBackend()) {
+    return <>{children}</>;
+  }
 
   if (isLoading) {
     return (
