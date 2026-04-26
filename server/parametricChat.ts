@@ -16,14 +16,12 @@ import {
   listMessagesForConversation,
   updateMessageContent,
 } from './db.js';
+import {
+  CHAT_COMPLETIONS_URL,
+  OPENAI_API_KEY,
+  resolveLocalLlmModel,
+} from './lib/localOpenAiModel.js';
 
-// OpenAI-compatible (vLLM) API
-const OPENAI_BASE_URL = (
-  process.env.OPENAI_BASE_URL ?? 'http://192.168.30.121:8000/v1'
-).replace(/\/$/, '');
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? 'changeme';
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? '/model';
-const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 const MAX_TOKENS_CAP = parseInt(
   process.env.MAX_TOKENS_CAP ?? '4096',
   10,
@@ -198,6 +196,7 @@ interface ChatCompletionsRequest {
 
 async function generateTitleFromMessages(
   messagesToSend: OpenAIMessage[],
+  llmModel: string,
 ): Promise<string> {
   try {
     const titleSystemPrompt = `Generate a short title for a 3D object. Rules:
@@ -214,7 +213,7 @@ async function generateTitleFromMessages(
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: llmModel,
         max_tokens: capMax(30),
         messages: [
           { role: 'system', content: titleSystemPrompt },
@@ -437,6 +436,8 @@ export async function handleParametricChatRequest(
     newMessageId: string;
   };
 
+  const llmModel = await resolveLocalLlmModel(model);
+
   let list: Message[];
   try {
     list = await listMessagesForConversation(conversationId);
@@ -459,7 +460,7 @@ export async function handleParametricChatRequest(
   }
 
   // Insert placeholder assistant message that we will stream updates into
-  let content: Content = { model };
+  let content: Content = { model: llmModel };
   const newMessageData = await insertAssistantPlaceholder(
     {
       id: newMessageId,
@@ -547,7 +548,7 @@ export async function handleParametricChatRequest(
 
     // Prepare request body
     const requestBody: ChatCompletionsRequest = {
-      model: OPENAI_MODEL,
+      model: llmModel,
       messages: [
         { role: 'system', content: PARAMETRIC_AGENT_PROMPT },
         ...messagesToSend,
@@ -732,7 +733,10 @@ export async function handleParametricChatRequest(
               );
 
               // Generate a title from the messages
-              const title = await generateTitleFromMessages(messagesToSend);
+              const title = await generateTitleFromMessages(
+                messagesToSend,
+                llmModel,
+              );
 
               // Remove the code from the text (keep any non-code explanation)
               let cleanedText = content.text;
@@ -845,7 +849,7 @@ export async function handleParametricChatRequest(
 
             // Code generation request logic (SSE streaming)
             const codeRequestBody: ChatCompletionsRequest = {
-              model: OPENAI_MODEL,
+              model: llmModel,
               messages: [
                 { role: 'system', content: STRICT_CODE_PROMPT },
                 ...codeMessages,
@@ -855,7 +859,10 @@ export async function handleParametricChatRequest(
             };
 
             // Kick off title generation alongside the streamed code.
-            const titlePromise = generateTitleFromMessages(messagesToSend);
+            const titlePromise = generateTitleFromMessages(
+              messagesToSend,
+              llmModel,
+            );
 
             let rawCode = '';
             let codeGenFailed = false;

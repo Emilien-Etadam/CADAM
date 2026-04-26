@@ -16,11 +16,10 @@ import { StreamingCodeBlock } from '@/components/chat/StreamingCodeBlock';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
-import {
-  cn,
-  getBackupModel,
-  PARAMETRIC_MODELS,
-} from '@/lib/utils';
+import { cn, getBackupModel, CREATIVE_MODELS } from '@/lib/utils';
+import { useLocalApiModels } from '@/hooks/useLocalApiModels';
+import { parametricModelConfigsFromApi } from '@/lib/localLlmModelConfigs';
+import type { ModelConfig } from '@/types/misc';
 import { useConversation } from '@/contexts/ConversationContext';
 import {
   Tooltip,
@@ -477,25 +476,38 @@ function RetryModelSelector({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const { conversation } = useConversation();
+  const { data: apiModels } = useLocalApiModels();
 
-  const models = PARAMETRIC_MODELS;
+  const models: ModelConfig[] = useMemo(() => {
+    if (conversation.type === 'creative') {
+      return CREATIVE_MODELS;
+    }
+    return parametricModelConfigsFromApi(apiModels);
+  }, [conversation.type, apiModels]);
 
-  const selectedModelConfig =
-    models.find(
-      (m) =>
-        m.id ===
-        getBackupModel({
-          message,
-          parentMessage,
-          type: conversation.type,
-        }),
-    ) ?? models[0];
+  const backupId = getBackupModel({
+    message,
+    parentMessage,
+    type: conversation.type,
+  });
+
+  const selectedModelConfig: ModelConfig | undefined = useMemo(() => {
+    const fromList = models.find((m) => m.id === backupId);
+    if (fromList) return fromList;
+    if (backupId && models.length > 0) {
+      return { id: backupId, name: backupId, description: '' };
+    }
+    if (apiModels?.defaultModel) {
+      return { id: apiModels.defaultModel, name: apiModels.defaultModel, description: '' };
+    }
+    return models[0];
+  }, [models, backupId, apiModels?.defaultModel]);
 
   const availableModels = models.filter(
-    (m) => m.id !== selectedModelConfig.id,
+    (m) => m.id !== selectedModelConfig?.id,
   );
 
-  if (availableModels.length === 0) {
+  if (availableModels.length === 0 || !selectedModelConfig) {
     return (
       <Button
         variant="outline"
@@ -505,7 +517,7 @@ function RetryModelSelector({
           className,
         )}
       >
-        <span>{selectedModelConfig.name}</span>
+        <span>{selectedModelConfig?.name ?? (backupId || '—')}</span>
       </Button>
     );
   }

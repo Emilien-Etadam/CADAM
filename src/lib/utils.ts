@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Message, Model, Parameter } from '@shared/types';
 import { ModelConfig } from '../types/misc.ts';
+import { getPersistedLocalLlmModelId } from '@/lib/localLlmSettings';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -235,45 +236,6 @@ export function getInitials(fullName: string | null) {
   return 'U';
 }
 
-export const PARAMETRIC_MODELS: ModelConfig[] = [
-  {
-    id: 'google/gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro',
-    description: 'Latest Google model with excellent multi-modal capabilities',
-    provider: 'Google',
-    supportsTools: true,
-    supportsThinking: true,
-    supportsVision: true,
-  },
-  {
-    id: 'anthropic/claude-opus-4.7',
-    name: 'Claude Opus 4.7',
-    description: 'Most powerful Anthropic model for complex reasoning',
-    provider: 'Anthropic',
-    supportsTools: true,
-    supportsThinking: true,
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.4',
-    name: 'GPT-5.4',
-    description: 'Most powerful OpenAI model with adaptive reasoning',
-    provider: 'OpenAI',
-    supportsTools: true,
-    supportsThinking: true,
-    supportsVision: true,
-  },
-  {
-    id: 'z-ai/glm-5.1',
-    name: 'GLM 5.1',
-    description: 'Daily driver Zhipu model for reliable CAD generation',
-    provider: 'Zhipu',
-    supportsTools: true,
-    supportsThinking: true,
-    supportsVision: true,
-  },
-];
-
 export const CREATIVE_MODELS: ModelConfig[] = [
   {
     id: 'ultra',
@@ -311,7 +273,7 @@ export function getBackupModel({
     return parentMessage.content.model;
   }
   if (type === 'parametric') {
-    return 'fast';
+    return getPersistedLocalLlmModelId() ?? '';
   } else {
     return 'quality';
   }

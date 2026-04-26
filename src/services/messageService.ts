@@ -1,12 +1,13 @@
 import { useConversation } from '@/contexts/ConversationContext';
 import { getApiBaseUrl } from '@/lib/localBackend';
+import { getPersistedLocalLlmModelId } from '@/lib/localLlmSettings';
 import { makeUuid } from '@/lib/uuid';
 import {
   apiInsertMessage,
   apiListMessages,
   apiUpdateMessage,
 } from '@/services/localDataApi';
-import { Content, Conversation, Message, Model } from '@shared/types';
+import { Content, Conversation, Message, type Model } from '@shared/types';
 import { HistoryConversation } from '../types/misc.ts';
 import {
   QueryClient,
@@ -298,8 +299,13 @@ export function useSendContentMutation({
         parent_message_id: conversation.current_message_leaf_id ?? null,
         conversation_id: conversation.id,
       });
+      const parametricModel: Model =
+        content.model ??
+        conversation.settings?.model ??
+        getPersistedLocalLlmModelId() ??
+        '';
       await sendToParametricChat({
-        model: content.model ?? conversation.settings?.model ?? 'fast',
+        model: parametricModel,
         messageId: userMessage.id,
         conversationId: conversation.id,
       });
@@ -363,8 +369,10 @@ export function useEditMessageMutation({
         parent_message_id: updatedMessage.parent_message_id ?? null,
         conversation_id: conversation.id,
       });
+      const parametricModel: Model =
+        conversation.settings?.model ?? getPersistedLocalLlmModelId() ?? '';
       await sendToParametricChat({
-        model: conversation.settings?.model ?? 'fast',
+        model: parametricModel,
         messageId: userMessage.id,
         conversationId: conversation.id,
       });

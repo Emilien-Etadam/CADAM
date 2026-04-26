@@ -14,6 +14,14 @@ import { ChatTitle } from '@/components/chat/ChatTitle';
 import { CreateIcon } from '@/components/icons/ui/CreateIcon';
 import { ConditionalWrapper } from '@/components/ConditionalWrapper';
 import { TreeNode } from '@shared/Tree';
+import { useLocalApiModels } from '@/hooks/useLocalApiModels';
+import { parametricModelConfigsFromApi } from '@/lib/localLlmModelConfigs';
+import { CREATIVE_MODELS } from '@/lib/utils';
+import {
+  getPersistedLocalLlmModelId,
+  setPersistedLocalLlmModelId,
+} from '@/lib/localLlmSettings';
+import type { ModelConfig } from '@/types/misc';
 
 interface ChatSectionProps {
   messages: TreeNode<Message>[];
@@ -46,6 +54,18 @@ export function ChatSection({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { conversation, updateConversation } = useConversation();
   const navigate = useNavigate();
+  const { data: apiModels, isLoading: localModelsLoading } = useLocalApiModels();
+
+  const parametricLlmModelConfigs: ModelConfig[] = useMemo(
+    () => parametricModelConfigsFromApi(apiModels),
+    [apiModels],
+  );
+
+  const chatModelList: ModelConfig[] = useMemo(
+    () =>
+      conversation.type === 'parametric' ? parametricLlmModelConfigs : CREATIVE_MODELS,
+    [conversation.type, parametricLlmModelConfigs],
+  );
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -58,9 +78,17 @@ export function ChatSection({
     }
   }, []);
 
-  const model =
-    conversation.settings?.model ??
-    (conversation.type === 'parametric' ? 'fast' : 'quality');
+  const model = useMemo(() => {
+    if (conversation.type === 'parametric') {
+      return (
+        conversation.settings?.model ??
+        getPersistedLocalLlmModelId() ??
+        apiModels?.defaultModel ??
+        ''
+      );
+    }
+    return conversation.settings?.model ?? 'quality';
+  }, [conversation.type, conversation.settings, apiModels?.defaultModel]);
 
   useEffect(() => {
     scrollToBottom();
@@ -96,16 +124,27 @@ export function ChatSection({
 
   const handleSuggestionSelect = useCallback(
     (suggestion: string) => {
-      onSendMessage?.({
-        text: suggestion,
-        model: conversation.settings?.model,
-      });
+      const m =
+        conversation.type === 'parametric'
+          ? (conversation.settings?.model ??
+            getPersistedLocalLlmModelId() ??
+            apiModels?.defaultModel)
+          : conversation.settings?.model;
+      onSendMessage?.({ text: suggestion, model: m });
     },
-    [conversation.settings?.model, onSendMessage],
+    [
+      conversation.type,
+      conversation.settings?.model,
+      apiModels?.defaultModel,
+      onSendMessage,
+    ],
   );
 
   const handleModelChange = useCallback(
     (newModel: Model) => {
+      if (conversation.type === 'parametric') {
+        setPersistedLocalLlmModelId(newModel);
+      }
       if (!updateConversation) return;
       updateConversation({
         ...conversation,
@@ -200,6 +239,10 @@ export function ChatSection({
             model={model}
             setModel={handleModelChange}
             conversation={conversation}
+            modelConfigs={chatModelList}
+            modelsLoading={
+              conversation.type === 'parametric' && localModelsLoading
+            }
           />
         </div>
       )}

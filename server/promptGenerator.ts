@@ -1,11 +1,10 @@
 import { corsHeaders } from './db.js';
+import {
+  CHAT_COMPLETIONS_URL,
+  OPENAI_API_KEY,
+  resolveLocalLlmModel,
+} from './lib/localOpenAiModel.js';
 
-const OPENAI_BASE_URL = (
-  process.env.OPENAI_BASE_URL ?? 'http://192.168.30.121:8000/v1'
-).replace(/\/$/, '');
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? 'changeme';
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? '/model';
-const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 const MAX_TOKENS_CAP = parseInt(process.env.MAX_TOKENS_CAP ?? '4096', 10);
 
 const PROMPT_SYSTEM_PROMPT = `You are a helpful assistant that generates creative prompts for organic 3D forms and artistic objects. Your prompts should be:
@@ -60,9 +59,15 @@ export async function handlePromptGeneratorRequest(
   const {
     existingText,
     type,
-  } = body as { existingText?: string; type?: 'parametric' | 'creative' };
+    model,
+  } = body as {
+    existingText?: string;
+    type?: 'parametric' | 'creative';
+    model?: unknown;
+  };
 
   try {
+    const llmModel = await resolveLocalLlmModel(model);
     let systemPrompt: string;
     let userPrompt: string;
 
@@ -121,7 +126,7 @@ Return only the enhanced prompt text, no introductory phrases.`;
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: llmModel,
         max_tokens: Math.min(200, MAX_TOKENS_CAP),
         messages: [
           { role: 'system', content: systemPrompt },

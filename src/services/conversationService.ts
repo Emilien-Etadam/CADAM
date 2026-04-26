@@ -84,7 +84,7 @@ export async function generateConversationTitle(
   const response = await fetch(`${getApiBaseUrl()}/api/title-generator`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, conversationId }),
+    body: JSON.stringify({ content, conversationId, model: content.model }),
   });
   if (!response.ok) {
     throw new Error(`Failed to generate title: ${response.statusText}`);

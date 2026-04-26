@@ -163,7 +163,7 @@ export function ModelSelector({
                   : 'block'
               }
             >
-              {selectedModelConfig?.name}
+              {selectedModelConfig?.name ?? selectedModel}
             </span>
           </span>
           <ChevronDown

@@ -116,7 +116,7 @@ export function ParametricEditorView() {
 
       const newContent: Content = {
         text: message.content.text ?? '',
-        model: message.content.model ?? 'fast',
+        model: message.content.model,
         artifact: {
           title: message.content.artifact?.title ?? '',
           version: message.content.artifact?.version ?? '',

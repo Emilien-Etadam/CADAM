@@ -6,13 +6,14 @@ import React, {
   useCallback,
 } from 'react';
 import { ArrowUp, Loader2, Wand2 } from 'lucide-react';
-import { cn, PARAMETRIC_MODELS } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Content, Model } from '@shared/types';
 import { useToast } from '@/hooks/use-toast';
 import { getApiBaseUrl } from '@/lib/localBackend';
 import { ModelSelector } from '@/components/ModelSelector';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import type { ModelConfig } from '@/types/misc';
 
 interface TextAreaChatProps {
   onSubmit: (content: Content) => void;
@@ -29,6 +30,8 @@ interface TextAreaChatProps {
     id: string;
     user_id: string;
   };
+  modelConfigs: ModelConfig[];
+  modelsLoading?: boolean;
 }
 
 export default function TextAreaChat({
@@ -43,6 +46,8 @@ export default function TextAreaChat({
   showPromptGenerator = true,
   showFullLabels = true,
   conversation,
+  modelConfigs,
+  modelsLoading = false,
 }: TextAreaChatProps) {
   const { toast } = useToast();
   const [input, setInput] = useState('');
@@ -78,7 +83,8 @@ export default function TextAreaChat({
     try {
       const body = {
         existingText: input.trim() || null,
-        type: 'parametric',
+        type: 'parametric' as const,
+        model,
       };
       const r = await fetch(`${getApiBaseUrl()}/api/prompt-generator`, {
         method: 'POST',
@@ -118,10 +124,10 @@ export default function TextAreaChat({
         <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1 pt-1">
           <div className="flex flex-wrap items-center gap-2">
             <ModelSelector
-              models={PARAMETRIC_MODELS}
+              models={modelConfigs}
               selectedModel={model}
               onModelChange={setModel}
-              disabled={disabled || isLoading}
+              disabled={disabled || isLoading || modelsLoading}
               type="parametric"
             />
             {showPromptGenerator && (

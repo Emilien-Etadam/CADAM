@@ -1,13 +1,12 @@
 import type { Content } from '@shared/types.ts';
 import { formatCreativeUserMessage } from './lib/titleFormat.js';
 import { corsHeaders, devUser } from './db.js';
+import {
+  CHAT_COMPLETIONS_URL,
+  OPENAI_API_KEY,
+  resolveLocalLlmModel,
+} from './lib/localOpenAiModel.js';
 
-const OPENAI_BASE_URL = (
-  process.env.OPENAI_BASE_URL ?? 'http://192.168.30.121:8000/v1'
-).replace(/\/$/, '');
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? 'changeme';
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? '/model';
-const CHAT_COMPLETIONS_URL = `${OPENAI_BASE_URL}/chat/completions`;
 const MAX_TOKENS_CAP = parseInt(process.env.MAX_TOKENS_CAP ?? '4096', 10);
 
 const TITLE_SYSTEM_PROMPT = `You are a helpful assistant that generates concise, descriptive titles for conversation threads based on the first message in the thread.
@@ -86,9 +85,10 @@ function toOpenAIUserContent(
 export async function handleTitleGeneratorRequest(
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const { content, conversationId } = body as {
+  const { content, conversationId, model } = body as {
     content: Content;
     conversationId: string;
+    model?: unknown;
   };
 
   const uid = devUser().id;
@@ -103,6 +103,9 @@ export async function handleTitleGeneratorRequest(
   );
 
   try {
+    const llmModel = await resolveLocalLlmModel(
+      model !== undefined ? model : content.model,
+    );
     const response = await fetch(CHAT_COMPLETIONS_URL, {
       method: 'POST',
       headers: {
@@ -110,7 +113,7 @@ export async function handleTitleGeneratorRequest(
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: llmModel,
         max_tokens: Math.min(100, MAX_TOKENS_CAP),
         messages: [
           { role: 'system', content: TITLE_SYSTEM_PROMPT },

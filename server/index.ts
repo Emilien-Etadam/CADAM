@@ -6,6 +6,7 @@ import { pool, ensureLocalUser, devUser } from './db.js';
 import { handleParametricChatRequest } from './parametricChat.js';
 import { handleTitleGeneratorRequest } from './titleGenerator.js';
 import { handlePromptGeneratorRequest } from './promptGenerator.js';
+import { getModelsListPayload } from './lib/localOpenAiModel.js';
 
 config({ path: '.env.local' });
 config();
@@ -100,6 +101,19 @@ createServer(async (req, res) => {
   }
 
   const uid = devUser().id;
+
+  if (url.pathname === '/api/models' && req.method === 'GET') {
+    try {
+      const payload = await getModelsListPayload();
+      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(payload));
+    } catch (e) {
+      console.error(e);
+      res.writeHead(500, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'models_unavailable' }));
+    }
+    return;
+  }
 
   if (url.pathname === '/api/parametric-chat' && req.method === 'POST') {
     const body = await readJsonBody(req);

@@ -5,11 +5,17 @@ import { getEffectiveUserId } from '@/lib/localUser';
 import { apiCreateConversation, apiPatchConversation } from '@/services/localDataApi';
 import TextAreaChat from '@/components/TextAreaChat';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useLocalApiModels } from '@/hooks/useLocalApiModels';
 import { Content, Conversation, Model } from '@shared/types';
 import { cn } from '@/lib/utils';
 import { makeUuid } from '@/lib/uuid';
+import { parametricModelConfigsFromApi } from '@/lib/localLlmModelConfigs';
+import {
+  getPersistedLocalLlmModelId,
+  setPersistedLocalLlmModelId,
+} from '@/lib/localLlmSettings';
 import { generateConversationTitle } from '@/services/conversationService';
 import { useSendContentMutation } from '@/services/messageService';
 
@@ -19,10 +25,33 @@ export function PromptView() {
   const { user } = useAuth();
   const { isSidebarOpen } = useOutletContext<{ isSidebarOpen: boolean }>();
   const queryClient = useQueryClient();
+  const { data: apiModels, isLoading: modelsLoading } = useLocalApiModels();
 
-  const [model, setModel] = useState<Model>('google/gemini-3.1-pro-preview');
+  const [model, setModel] = useState<Model>('');
   const [isLoaded, setIsLoaded] = useState(false);
   const isMobile = useIsMobile();
+
+  const homeModelConfigs = useMemo(
+    () => parametricModelConfigsFromApi(apiModels),
+    [apiModels],
+  );
+
+  useEffect(() => {
+    if (model) return;
+    const stored = getPersistedLocalLlmModelId();
+    if (stored) {
+      setModel(stored);
+      return;
+    }
+    if (apiModels?.defaultModel) {
+      setModel(apiModels.defaultModel);
+    }
+  }, [apiModels?.defaultModel, model]);
+
+  const setModelWithPersist = useCallback((m: Model) => {
+    setPersistedLocalLlmModelId(m);
+    setModel(m);
+  }, []);
 
   const newConversationId = useMemo(() => makeUuid(), []);
 
@@ -131,7 +160,9 @@ export function PromptView() {
                   user_id: user?.id ?? '',
                 }}
                 model={model}
-                setModel={setModel}
+                setModel={setModelWithPersist}
+                modelConfigs={homeModelConfigs}
+                modelsLoading={modelsLoading}
               />
             </div>
           </div>
