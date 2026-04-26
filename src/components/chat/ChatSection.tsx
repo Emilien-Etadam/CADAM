@@ -17,10 +17,8 @@ import { TreeNode } from '@shared/Tree';
 import { useLocalApiModels } from '@/hooks/useLocalApiModels';
 import { parametricModelConfigsFromApi } from '@/lib/localLlmModelConfigs';
 import { CREATIVE_MODELS } from '@/lib/utils';
-import {
-  getPersistedLocalLlmModelId,
-  setPersistedLocalLlmModelId,
-} from '@/lib/localLlmSettings';
+import { resolveParametricModel } from '@/lib/resolveParametricModel';
+import { setPersistedLocalLlmModelId } from '@/lib/localLlmSettings';
 import type { ModelConfig } from '@/types/misc';
 
 interface ChatSectionProps {
@@ -54,7 +52,8 @@ export function ChatSection({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { conversation, updateConversation } = useConversation();
   const navigate = useNavigate();
-  const { data: apiModels, isLoading: localModelsLoading } = useLocalApiModels();
+  const { data: apiModels, isLoading: localModelsLoading } =
+    useLocalApiModels();
 
   const parametricLlmModelConfigs: ModelConfig[] = useMemo(
     () => parametricModelConfigsFromApi(apiModels),
@@ -63,7 +62,9 @@ export function ChatSection({
 
   const chatModelList: ModelConfig[] = useMemo(
     () =>
-      conversation.type === 'parametric' ? parametricLlmModelConfigs : CREATIVE_MODELS,
+      conversation.type === 'parametric'
+        ? parametricLlmModelConfigs
+        : CREATIVE_MODELS,
     [conversation.type, parametricLlmModelConfigs],
   );
 
@@ -80,15 +81,15 @@ export function ChatSection({
 
   const model = useMemo(() => {
     if (conversation.type === 'parametric') {
-      return (
-        conversation.settings?.model ??
-        getPersistedLocalLlmModelId() ??
-        apiModels?.defaultModel ??
-        ''
-      );
+      return resolveParametricModel({ conversation, apiModels });
     }
     return conversation.settings?.model ?? 'quality';
-  }, [conversation.type, conversation.settings, apiModels?.defaultModel]);
+  }, [conversation, apiModels]);
+
+  const validParametricIds = useMemo(
+    () => new Set(parametricLlmModelConfigs.map((c) => c.id)),
+    [parametricLlmModelConfigs],
+  );
 
   useEffect(() => {
     scrollToBottom();
@@ -126,18 +127,11 @@ export function ChatSection({
     (suggestion: string) => {
       const m =
         conversation.type === 'parametric'
-          ? (conversation.settings?.model ??
-            getPersistedLocalLlmModelId() ??
-            apiModels?.defaultModel)
-          : conversation.settings?.model;
+          ? resolveParametricModel({ conversation, apiModels })
+          : (conversation.settings?.model ?? 'quality');
       onSendMessage?.({ text: suggestion, model: m });
     },
-    [
-      conversation.type,
-      conversation.settings?.model,
-      apiModels?.defaultModel,
-      onSendMessage,
-    ],
+    [conversation, apiModels, onSendMessage],
   );
 
   const handleModelChange = useCallback(
@@ -158,6 +152,30 @@ export function ChatSection({
     },
     [conversation, updateConversation],
   );
+
+  useEffect(() => {
+    if (conversation.type !== 'parametric' || localModelsLoading) return;
+    if (validParametricIds.size === 0) return;
+    const resolved = resolveParametricModel({ conversation, apiModels });
+    if (resolved && validParametricIds.has(resolved)) return;
+    const primary =
+      (apiModels?.defaultModel &&
+        validParametricIds.has(apiModels.defaultModel) &&
+        apiModels.defaultModel) ||
+      parametricLlmModelConfigs[0]?.id ||
+      '';
+    if (!primary) return;
+    if (primary === resolved) return;
+    handleModelChange(primary);
+  }, [
+    conversation.type,
+    conversation,
+    localModelsLoading,
+    apiModels,
+    validParametricIds,
+    parametricLlmModelConfigs,
+    handleModelChange,
+  ]);
 
   return (
     <div className="flex h-full w-full flex-col items-center overflow-hidden border-r border-neutral-700 bg-adam-bg-secondary-dark dark:border-gray-800">

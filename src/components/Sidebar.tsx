@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Plus, LayoutGrid } from 'lucide-react';
+import { Menu, Plus, LayoutGrid, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiListRecentConversations } from '@/services/localDataApi';
@@ -64,16 +64,19 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
   return (
     <div
       className={cn(
-        'hidden h-dvh flex-col border-r border-gray-200 bg-adam-bg-dark transition-all duration-300 ease-in-out dark:border-adam-border-primary md:flex',
+        'dark:border-adam-border-primary hidden h-dvh flex-col border-r border-gray-200 bg-adam-bg-dark transition-all duration-300 ease-in-out md:flex',
         isSidebarOpen ? 'w-64' : 'w-20',
       )}
     >
       <div className="flex h-full flex-col">
         <div
-          className={cn('flex border-b border-gray-200 p-2 dark:border-gray-800', {
-            'justify-center': !isSidebarOpen,
-            'px-2': isSidebarOpen,
-          })}
+          className={cn(
+            'flex border-b border-gray-200 p-2 dark:border-gray-800',
+            {
+              'justify-center': !isSidebarOpen,
+              'px-2': isSidebarOpen,
+            },
+          )}
         >
           {isSidebarOpen ? (
             <h1 className="text-sm font-bold text-adam-text-primary">CADAM</h1>
@@ -97,6 +100,14 @@ function DesktopSidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
           >
             <LayoutGrid className="h-4 w-4" />
             {isSidebarOpen && 'History'}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-adam-text-primary"
+            onClick={() => sidebarNavigate('/settings')}
+          >
+            <Settings className="h-4 w-4" />
+            {isSidebarOpen && 'Local LLM'}
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">

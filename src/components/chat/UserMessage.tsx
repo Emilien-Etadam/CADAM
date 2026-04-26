@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useConversation } from '@/contexts/ConversationContext';
 import { TreeNode } from '@shared/Tree';
 import { UserAvatar } from '@/components/chat/UserAvatar';
+import { ModelButton } from '@/components/chat/ModelButton';
 
 interface UserMessageProps {
   isLoading: boolean;
@@ -138,36 +139,41 @@ export function UserMessage({
         ) : (
           <>
             {(isEditing || (input && input.length > 0)) && (
-              <div
-                className={cn(
-                  'relative grid w-fit rounded-lg text-white',
-                  (hovering ||
-                    message.content.images ||
-                    message.content.mesh) &&
-                    'bg-adam-neutral-800',
-                )}
-              >
-                {isEditing && (
-                  <Textarea
-                    value={input}
-                    ref={textareaRef}
-                    onChange={(e) => {
-                      setInput(e.target.value);
-                    }}
-                    className="block h-auto min-h-0 w-full resize-none overflow-hidden whitespace-pre-line break-words border-none bg-adam-neutral-800 px-3 py-2 text-sm sm:px-4"
-                    rows={1}
-                    style={{ gridArea: '1 / -1' }}
-                  />
-                )}
+              <div className="flex max-w-full flex-col items-end gap-1.5">
                 <div
                   className={cn(
-                    'pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words px-3 py-2 text-sm sm:px-4',
-                    isEditing ? 'opacity-0' : '',
+                    'relative grid w-fit rounded-lg text-white',
+                    (hovering ||
+                      message.content.images ||
+                      message.content.mesh) &&
+                      'bg-adam-neutral-800',
                   )}
                 >
-                  <span>{input}</span>
-                  <br />
+                  {isEditing && (
+                    <Textarea
+                      value={input}
+                      ref={textareaRef}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                      }}
+                      className="block h-auto min-h-0 w-full resize-none overflow-hidden whitespace-pre-line break-words border-none bg-adam-neutral-800 px-3 py-2 text-sm sm:px-4"
+                      rows={1}
+                      style={{ gridArea: '1 / -1' }}
+                    />
+                  )}
+                  <div
+                    className={cn(
+                      'pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words px-3 py-2 text-sm sm:px-4',
+                      isEditing ? 'opacity-0' : '',
+                    )}
+                  >
+                    <span>{input}</span>
+                    <br />
+                  </div>
                 </div>
+                {conversation.type === 'parametric' && !isEditing && (
+                  <ModelButton message={message} />
+                )}
               </div>
             )}
             {((hovering &&
@@ -321,4 +327,3 @@ function BranchNavigation({
     </div>
   );
 }
-

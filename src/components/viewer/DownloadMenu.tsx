@@ -663,7 +663,7 @@ export function DownloadMenu({
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-        } catch (fallbackError) {
+        } catch (_fallbackError) {
           console.error(error);
         }
       } finally {

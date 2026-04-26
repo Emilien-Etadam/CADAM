@@ -72,10 +72,12 @@ export function AssistantMessage({
   const { conversation, updateConversation } = useConversation();
   const { currentMessage, setCurrentMessage } = useCurrentMessage();
   const isMobile = useIsMobile();
+  const { data: apiModels } = useLocalApiModels();
   const model = getBackupModel({
     message,
     parentMessage: message.parent ?? undefined,
     type: conversation.type,
+    parametricDefaultModel: apiModels?.defaultModel,
   });
 
   // Removed parameter diff banner from assistant message
@@ -346,21 +348,19 @@ export function AssistantMessage({
                       <span>Retry</span>
                     </TooltipContent>
                   </Tooltip>
-                  {model && (
-                    <RetryModelSelector
-                      message={message}
-                      parentMessage={message.parent ?? undefined}
-                      onRetry={(model) =>
-                        onRetry({ model, id: message.parent_message_id! })
-                      }
-                      disabled={isLoading || limitReached}
-                      className={cn(
-                        'h-6 w-fit',
-                        limitReached && 'cursor-not-allowed opacity-50',
-                        updateConversation && 'rounded-l-none',
-                      )}
-                    />
-                  )}
+                  <RetryModelSelector
+                    message={message}
+                    parentMessage={message.parent ?? undefined}
+                    onRetry={(model) =>
+                      onRetry({ model, id: message.parent_message_id! })
+                    }
+                    disabled={isLoading || limitReached}
+                    className={cn(
+                      'h-6 w-fit',
+                      limitReached && 'cursor-not-allowed opacity-50',
+                      updateConversation && 'rounded-l-none',
+                    )}
+                  />
                 </div>
               )}
               {message.siblings.length > 1 && updateConversation && (
@@ -489,18 +489,23 @@ function RetryModelSelector({
     message,
     parentMessage,
     type: conversation.type,
+    parametricDefaultModel: apiModels?.defaultModel,
   });
 
   const selectedModelConfig: ModelConfig | undefined = useMemo(() => {
     const fromList = models.find((m) => m.id === backupId);
     if (fromList) return fromList;
-    if (backupId && models.length > 0) {
+    if (backupId) {
       return { id: backupId, name: backupId, description: '' };
     }
     if (apiModels?.defaultModel) {
-      return { id: apiModels.defaultModel, name: apiModels.defaultModel, description: '' };
+      return {
+        id: apiModels.defaultModel,
+        name: apiModels.defaultModel,
+        description: '',
+      };
     }
-    return models[0];
+    return undefined;
   }, [models, backupId, apiModels?.defaultModel]);
 
   const availableModels = models.filter(

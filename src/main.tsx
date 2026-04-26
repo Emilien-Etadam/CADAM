@@ -1,11 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  Navigate,
+  RouterProvider,
+} from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 import { ErrorView } from './views/ErrorView.tsx';
 import { PromptView } from './views/PromptView.tsx';
 import { HistoryView } from './views/HistoryView.tsx';
+import { LocalLlmSettingsView } from './views/LocalLlmSettingsView.tsx';
 import { Layout } from './components/Layout.tsx';
 import EditorView from './views/EditorView.tsx';
 
@@ -33,6 +38,11 @@ const router = createBrowserRouter(
               path: '/history',
               errorElement: <ErrorView />,
               element: <HistoryView />,
+            },
+            {
+              path: '/settings',
+              errorElement: <ErrorView />,
+              element: <LocalLlmSettingsView />,
             },
             { path: '*', element: <Navigate to="/" replace /> },
           ],

@@ -261,10 +261,13 @@ export function getBackupModel({
   message,
   parentMessage,
   type,
+  parametricDefaultModel,
 }: {
   message: Message;
   parentMessage?: Message;
   type: 'parametric' | 'creative';
+  /** Dernier recours côté paramétrique, ex. `defaultModel` de l’API locale. */
+  parametricDefaultModel?: string;
 }): Model {
   if (message.content.model) {
     return message.content.model;
@@ -273,7 +276,7 @@ export function getBackupModel({
     return parentMessage.content.model;
   }
   if (type === 'parametric') {
-    return getPersistedLocalLlmModelId() ?? '';
+    return getPersistedLocalLlmModelId() ?? parametricDefaultModel ?? '';
   } else {
     return 'quality';
   }

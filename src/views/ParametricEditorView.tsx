@@ -15,6 +15,8 @@ import {
   useUpdateMessageOptimisticMutation,
   useChangeRatingMutation,
 } from '@/services/messageService';
+import { useLocalApiModels } from '@/hooks/useLocalApiModels';
+import { resolveParametricModel } from '@/lib/resolveParametricModel';
 import Tree from '@shared/Tree';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -62,6 +64,7 @@ export function ParametricEditorView() {
     !!isSending || isRetryingMessage || isSendingMessage || isEditingMessage;
 
   const { data: messages = [] } = useMessagesQuery();
+  const { data: apiModels } = useLocalApiModels();
 
   const lastMessage = useMemo(() => {
     if (conversation.current_message_leaf_id) {
@@ -159,14 +162,20 @@ export function ParametricEditorView() {
 
   const fixError = useCallback(
     async (error: OpenSCADError) => {
+      const m = resolveParametricModel({
+        content: lastMessage?.content,
+        conversation,
+        apiModels,
+      });
       const newContent: Content = {
         text: 'Fix with AI',
         error: error.stdErr.join('\n'),
+        model: m,
       };
 
       sendMessage(newContent);
     },
-    [sendMessage],
+    [sendMessage, lastMessage?.content, conversation, apiModels],
   );
 
   return (

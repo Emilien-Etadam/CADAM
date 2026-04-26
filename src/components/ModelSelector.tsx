@@ -20,6 +20,8 @@ interface ModelSelectorProps {
   className?: string;
   type?: 'parametric' | 'creative'; // Optional type prop that takes precedence over conversation context
   focused?: boolean; // New prop to indicate if text area is focused
+  /** Chargement de la liste (évite un menu vide confus). */
+  modelsLoading?: boolean;
 }
 
 export function ModelSelector({
@@ -30,6 +32,7 @@ export function ModelSelector({
   disabled,
   type,
   focused = false,
+  modelsLoading = false,
 }: ModelSelectorProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { conversation } = useConversation();
@@ -43,6 +46,17 @@ export function ModelSelector({
   const [slideDirection, setSlideDirection] = useState<'up' | 'down'>('up');
 
   const selectedModelConfig = models.find((m) => m.id === selectedModel);
+  const displayLabel = modelsLoading
+    ? 'Loading…'
+    : currentType === 'parametric' && models.length === 0
+      ? selectedModel.length > 0
+        ? selectedModel
+        : 'No models available'
+      : (selectedModelConfig?.name ?? selectedModel);
+
+  const noParametricChoice =
+    currentType === 'parametric' && models.length === 0 && !modelsLoading;
+  const isTriggerDisabled = !!disabled || noParametricChoice;
 
   // Store previous selected model name and type
   const prevNameRef = useRef<string | undefined>(selectedModelConfig?.name);
@@ -136,11 +150,11 @@ export function ModelSelector({
                 : 'bg-adam-neutral-800 text-adam-text-primary'),
             className,
           )}
-          disabled={!!disabled}
+          disabled={isTriggerDisabled}
         >
           <span className="relative inline-grid items-center overflow-hidden text-right font-normal">
             {/* Previous name sliding out */}
-            {prevModelName && (
+            {prevModelName && !modelsLoading && (
               <span
                 style={{ gridColumn: 1, gridRow: 1 }}
                 className={`block ${
@@ -163,7 +177,7 @@ export function ModelSelector({
                   : 'block'
               }
             >
-              {selectedModelConfig?.name ?? selectedModel}
+              {displayLabel}
             </span>
           </span>
           <ChevronDown

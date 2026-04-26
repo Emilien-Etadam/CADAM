@@ -45,7 +45,7 @@ export default function TextAreaChat({
   setModel,
   showPromptGenerator = true,
   showFullLabels = true,
-  conversation,
+  conversation: _conversation,
   modelConfigs,
   modelsLoading = false,
 }: TextAreaChatProps) {
@@ -129,6 +129,7 @@ export default function TextAreaChat({
               onModelChange={setModel}
               disabled={disabled || isLoading || modelsLoading}
               type="parametric"
+              modelsLoading={modelsLoading}
             />
             {showPromptGenerator && (
               <Button

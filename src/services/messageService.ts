@@ -1,6 +1,8 @@
 import { useConversation } from '@/contexts/ConversationContext';
+import { getLocalApiModelsQueryKey } from '@/hooks/useLocalApiModels';
 import { getApiBaseUrl } from '@/lib/localBackend';
-import { getPersistedLocalLlmModelId } from '@/lib/localLlmSettings';
+import type { LocalApiModelsPayload } from '@/lib/localLlmModelConfigs';
+import { resolveParametricModel } from '@/lib/resolveParametricModel';
 import { makeUuid } from '@/lib/uuid';
 import {
   apiInsertMessage,
@@ -287,6 +289,8 @@ export function useSendContentMutation({
     conversationId: conversation.id,
   });
 
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationKey: ['send-content', conversation.id],
     mutationFn: async (content: Content) => {
@@ -299,11 +303,14 @@ export function useSendContentMutation({
         parent_message_id: conversation.current_message_leaf_id ?? null,
         conversation_id: conversation.id,
       });
-      const parametricModel: Model =
-        content.model ??
-        conversation.settings?.model ??
-        getPersistedLocalLlmModelId() ??
-        '';
+      const api = queryClient.getQueryData<LocalApiModelsPayload>(
+        getLocalApiModelsQueryKey(),
+      );
+      const parametricModel: Model = resolveParametricModel({
+        content,
+        conversation,
+        apiModels: api,
+      });
       await sendToParametricChat({
         model: parametricModel,
         messageId: userMessage.id,
@@ -355,6 +362,7 @@ export function useEditMessageMutation({
 }: {
   conversation: Conversation;
 }) {
+  const queryClient = useQueryClient();
   const { mutateAsync: insertMessageAsync } = useInsertMessageMutation();
   const { mutateAsync: sendToParametricChat } = useParametricChatMutation({
     conversationId: conversation.id,
@@ -369,8 +377,14 @@ export function useEditMessageMutation({
         parent_message_id: updatedMessage.parent_message_id ?? null,
         conversation_id: conversation.id,
       });
-      const parametricModel: Model =
-        conversation.settings?.model ?? getPersistedLocalLlmModelId() ?? '';
+      const api = queryClient.getQueryData<LocalApiModelsPayload>(
+        getLocalApiModelsQueryKey(),
+      );
+      const parametricModel: Model = resolveParametricModel({
+        content: updatedMessage.content,
+        conversation,
+        apiModels: api,
+      });
       await sendToParametricChat({
         model: parametricModel,
         messageId: userMessage.id,
