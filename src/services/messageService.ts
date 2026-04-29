@@ -1,6 +1,6 @@
 import { useConversation } from '@/contexts/ConversationContext';
 import { getLocalApiModelsQueryKey } from '@/hooks/useLocalApiModels';
-import { getApiBaseUrl } from '@/lib/localBackend';
+import { getApiBaseUrl, getLocalOpenAiAuthHeaders } from '@/lib/localBackend';
 import type { LocalApiModelsPayload } from '@/lib/localLlmModelConfigs';
 import { resolveParametricModel } from '@/lib/resolveParametricModel';
 import { makeUuid } from '@/lib/uuid';
@@ -135,7 +135,10 @@ export function useParametricChatMutation({
 
       const response = await fetch(`${getApiBaseUrl()}/api/parametric-chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getLocalOpenAiAuthHeaders(),
+        },
         body: JSON.stringify({
           conversationId: convId,
           messageId,

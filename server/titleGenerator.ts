@@ -3,8 +3,8 @@ import { formatCreativeUserMessage } from './lib/titleFormat.js';
 import { corsHeaders, devUser } from './db.js';
 import {
   CHAT_COMPLETIONS_URL,
-  OPENAI_API_KEY,
   resolveLocalLlmModel,
+  resolveOpenAiApiKey,
 } from './lib/localOpenAiModel.js';
 
 const MAX_TOKENS_CAP = parseInt(process.env.MAX_TOKENS_CAP ?? '4096', 10);
@@ -84,6 +84,7 @@ function toOpenAIUserContent(
 
 export async function handleTitleGeneratorRequest(
   body: Record<string, unknown>,
+  options?: { authorization?: string | null },
 ): Promise<Response> {
   const { content, conversationId, model } = body as {
     content: Content;
@@ -98,19 +99,19 @@ export async function handleTitleGeneratorRequest(
     conversationId,
   );
 
-  const userContent = toOpenAIUserContent(
-    userMessage.content as unknown[],
-  );
+  const userContent = toOpenAIUserContent(userMessage.content as unknown[]);
 
   try {
     const llmModel = await resolveLocalLlmModel(
       model !== undefined ? model : content.model,
+      options?.authorization,
     );
+    const openAiApiKey = resolveOpenAiApiKey(options?.authorization);
     const response = await fetch(CHAT_COMPLETIONS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: llmModel,

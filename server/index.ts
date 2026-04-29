@@ -95,7 +95,10 @@ createServer(async (req, res) => {
     await ensureLocalUser();
   } catch (e) {
     console.error(e);
-    res.writeHead(500, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(500, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify({ error: 'database_unavailable' }));
     return;
   }
@@ -104,12 +107,18 @@ createServer(async (req, res) => {
 
   if (url.pathname === '/api/models' && req.method === 'GET') {
     try {
-      const payload = await getModelsListPayload();
-      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      const payload = await getModelsListPayload(req.headers.authorization);
+      res.writeHead(200, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify(payload));
     } catch (e) {
       console.error(e);
-      res.writeHead(500, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(500, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify({ error: 'models_unavailable' }));
     }
     return;
@@ -117,21 +126,27 @@ createServer(async (req, res) => {
 
   if (url.pathname === '/api/parametric-chat' && req.method === 'POST') {
     const body = await readJsonBody(req);
-    const r = await handleParametricChatRequest(body);
+    const r = await handleParametricChatRequest(body, {
+      authorization: req.headers.authorization,
+    });
     await sendWebResponse(res, r);
     return;
   }
 
   if (url.pathname === '/api/title-generator' && req.method === 'POST') {
     const body = await readJsonBody(req);
-    const r = await handleTitleGeneratorRequest(body);
+    const r = await handleTitleGeneratorRequest(body, {
+      authorization: req.headers.authorization,
+    });
     await sendWebResponse(res, r);
     return;
   }
 
   if (url.pathname === '/api/prompt-generator' && req.method === 'POST') {
     const body = await readJsonBody(req);
-    const r = await handlePromptGeneratorRequest(body);
+    const r = await handlePromptGeneratorRequest(body, {
+      authorization: req.headers.authorization,
+    });
     await sendWebResponse(res, r);
     return;
   }
@@ -150,7 +165,10 @@ createServer(async (req, res) => {
          ORDER BY c.updated_at DESC`,
         [uid],
       );
-      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(200, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify(r.rows));
       return;
     }
@@ -161,7 +179,10 @@ createServer(async (req, res) => {
        LIMIT $2`,
       [uid, n],
     );
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows));
     return;
   }
@@ -186,7 +207,10 @@ createServer(async (req, res) => {
        RETURNING *`,
       [cid, uid, title, type, JSON.stringify(settings)],
     );
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -201,23 +225,32 @@ createServer(async (req, res) => {
         [id, uid],
       );
       if (r.rowCount === 0) {
-        res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+        res.writeHead(404, {
+          ...localCorsHeaders(req),
+          'Content-Type': 'application/json',
+        });
         res.end(JSON.stringify({ error: 'not_found' }));
         return;
       }
-      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(200, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify(r.rows[0]));
       return;
     }
 
     if (req.method === 'PATCH') {
       const body = (await readJsonBody(req)) as Record<string, unknown>;
-      const cur = await pool.query(`SELECT * FROM conversations WHERE id = $1 AND user_id = $2`, [
-        id,
-        uid,
-      ]);
+      const cur = await pool.query(
+        `SELECT * FROM conversations WHERE id = $1 AND user_id = $2`,
+        [id, uid],
+      );
       if (cur.rowCount === 0) {
-        res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+        res.writeHead(404, {
+          ...localCorsHeaders(req),
+          'Content-Type': 'application/json',
+        });
         res.end(JSON.stringify({ error: 'not_found' }));
         return;
       }
@@ -225,9 +258,8 @@ createServer(async (req, res) => {
       const title = (body.title ?? row.title) as string;
       const typ = (body.type ?? row.type) as string;
       const privacy = (body.privacy ?? row.privacy) as string;
-      const leaf = (body.current_message_leaf_id ?? row.current_message_leaf_id) as
-        | string
-        | null;
+      const leaf = (body.current_message_leaf_id ??
+        row.current_message_leaf_id) as string | null;
       const settings =
         body.settings !== undefined
           ? JSON.stringify(body.settings)
@@ -239,16 +271,19 @@ createServer(async (req, res) => {
          RETURNING *`,
         [title, typ, privacy, leaf, settings, id, uid],
       );
-      res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(200, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify(r.rows[0]));
       return;
     }
 
     if (req.method === 'DELETE') {
-      await pool.query(`DELETE FROM conversations WHERE id = $1 AND user_id = $2`, [
-        id,
-        uid,
-      ]);
+      await pool.query(
+        `DELETE FROM conversations WHERE id = $1 AND user_id = $2`,
+        [id, uid],
+      );
       res.writeHead(204, localCorsHeaders(req));
       res.end();
       return;
@@ -268,22 +303,31 @@ createServer(async (req, res) => {
        ORDER BY m.created_at ASC`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows));
     return;
   }
 
   if (url.pathname === '/api/messages' && req.method === 'POST') {
     const body = await readJsonBody(req);
-    const { id, conversation_id, role, content, parent_message_id, rating = 0 } =
-      body as {
-        id?: string;
-        conversation_id: string;
-        role: 'user' | 'assistant';
-        content: object;
-        parent_message_id?: string | null;
-        rating?: number;
-      };
+    const {
+      id,
+      conversation_id,
+      role,
+      content,
+      parent_message_id,
+      rating = 0,
+    } = body as {
+      id?: string;
+      conversation_id: string;
+      role: 'user' | 'assistant';
+      content: object;
+      parent_message_id?: string | null;
+      rating?: number;
+    };
     const mid = id ?? crypto.randomUUID();
     const r = await pool.query(
       `INSERT INTO messages (id, conversation_id, user_id, role, content, parent_message_id, rating)
@@ -302,11 +346,17 @@ createServer(async (req, res) => {
       ],
     );
     if (r.rowCount === 0) {
-      res.writeHead(403, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(403, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify({ error: 'forbidden' }));
       return;
     }
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -314,7 +364,10 @@ createServer(async (req, res) => {
   const msgPatch = url.pathname.match(/^\/api\/messages\/([^/]+)$/);
   if (msgPatch && (req.method === 'PATCH' || req.method === 'PUT')) {
     const messageId = msgPatch[1]!;
-    const body = (await readJsonBody(req)) as { content: object; rating?: number };
+    const body = (await readJsonBody(req)) as {
+      content: object;
+      rating?: number;
+    };
     const r = await pool.query(
       `UPDATE messages m SET
          content = $1::jsonb,
@@ -330,11 +383,17 @@ createServer(async (req, res) => {
       ],
     );
     if (r.rowCount === 0) {
-      res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(404, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify({ error: 'not_found' }));
       return;
     }
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows[0]));
     return;
   }
@@ -342,7 +401,10 @@ createServer(async (req, res) => {
   if (url.pathname === '/api/messages' && req.method === 'GET') {
     const conversationId = url.searchParams.get('conversationId');
     if (!conversationId) {
-      res.writeHead(400, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(400, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify({ error: 'conversationId' }));
       return;
     }
@@ -354,7 +416,10 @@ createServer(async (req, res) => {
        ORDER BY m.created_at ASC`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows));
     return;
   }
@@ -362,7 +427,10 @@ createServer(async (req, res) => {
   if (url.pathname === '/api/visual-messages' && req.method === 'GET') {
     const conversationId = url.searchParams.get('conversationId');
     if (!conversationId) {
-      res.writeHead(400, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+      res.writeHead(400, {
+        ...localCorsHeaders(req),
+        'Content-Type': 'application/json',
+      });
       res.end(JSON.stringify({ error: 'conversationId' }));
       return;
     }
@@ -375,12 +443,18 @@ createServer(async (req, res) => {
        LIMIT 50`,
       [conversationId, uid],
     );
-    res.writeHead(200, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      ...localCorsHeaders(req),
+      'Content-Type': 'application/json',
+    });
     res.end(JSON.stringify(r.rows));
     return;
   }
 
-  res.writeHead(404, { ...localCorsHeaders(req), 'Content-Type': 'application/json' });
+  res.writeHead(404, {
+    ...localCorsHeaders(req),
+    'Content-Type': 'application/json',
+  });
   res.end(JSON.stringify({ error: 'not_found' }));
 }).listen(PORT, HOST, () => {
   console.log(`Local CADAM server http://${HOST}:${PORT}`);

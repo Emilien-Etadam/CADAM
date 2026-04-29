@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'cadam.localLlmModelId';
 const STORAGE_BASE_URL_KEY = 'cadam.localApiBaseUrl';
+const STORAGE_OPENAI_API_KEY = 'cadam.localOpenAiApiKey';
 
 export function getPersistedApiBaseUrlOverride(): string | undefined {
   if (typeof localStorage === 'undefined') {
@@ -37,5 +38,25 @@ export function setPersistedLocalLlmModelId(id: string): void {
     localStorage.setItem(STORAGE_KEY, id);
   } else {
     localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+export function getPersistedOpenAiApiKey(): string | undefined {
+  if (typeof localStorage === 'undefined') {
+    return undefined;
+  }
+  const v = localStorage.getItem(STORAGE_OPENAI_API_KEY)?.trim();
+  return v && v.length > 0 ? v : undefined;
+}
+
+export function setPersistedOpenAiApiKey(key: string): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  const t = key.trim();
+  if (t.length > 0) {
+    localStorage.setItem(STORAGE_OPENAI_API_KEY, t);
+  } else {
+    localStorage.removeItem(STORAGE_OPENAI_API_KEY);
   }
 }

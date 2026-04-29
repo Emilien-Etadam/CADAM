@@ -9,7 +9,7 @@ import { ArrowUp, Loader2, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Content, Model } from '@shared/types';
 import { useToast } from '@/hooks/use-toast';
-import { getApiBaseUrl } from '@/lib/localBackend';
+import { getApiBaseUrl, getLocalOpenAiAuthHeaders } from '@/lib/localBackend';
 import { ModelSelector } from '@/components/ModelSelector';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -88,7 +88,10 @@ export default function TextAreaChat({
       };
       const r = await fetch(`${getApiBaseUrl()}/api/prompt-generator`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getLocalOpenAiAuthHeaders(),
+        },
         body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(r.statusText);

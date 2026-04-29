@@ -1,7 +1,10 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiBaseUrl } from '@/lib/localBackend';
+import { getApiBaseUrl, getLocalOpenAiAuthHeaders } from '@/lib/localBackend';
 import { getEffectiveUserId } from '@/lib/localUser';
-import { apiGetConversation, apiUpdateConversation } from '@/services/localDataApi';
+import {
+  apiGetConversation,
+  apiUpdateConversation,
+} from '@/services/localDataApi';
 import { Conversation, Content } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -83,7 +86,10 @@ export async function generateConversationTitle(
 ): Promise<string> {
   const response = await fetch(`${getApiBaseUrl()}/api/title-generator`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getLocalOpenAiAuthHeaders(),
+    },
     body: JSON.stringify({ content, conversationId, model: content.model }),
   });
   if (!response.ok) {

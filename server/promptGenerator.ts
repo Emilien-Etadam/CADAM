@@ -1,8 +1,8 @@
 import { corsHeaders } from './db.js';
 import {
   CHAT_COMPLETIONS_URL,
-  OPENAI_API_KEY,
   resolveLocalLlmModel,
+  resolveOpenAiApiKey,
 } from './lib/localOpenAiModel.js';
 
 const MAX_TOKENS_CAP = parseInt(process.env.MAX_TOKENS_CAP ?? '4096', 10);
@@ -55,19 +55,17 @@ Assistant: "a cable management clip for 8mm cables"
 
 export async function handlePromptGeneratorRequest(
   body: Record<string, unknown>,
+  options?: { authorization?: string | null },
 ): Promise<Response> {
-  const {
-    existingText,
-    type,
-    model,
-  } = body as {
+  const { existingText, type, model } = body as {
     existingText?: string;
     type?: 'parametric' | 'creative';
     model?: unknown;
   };
 
   try {
-    const llmModel = await resolveLocalLlmModel(model);
+    const llmModel = await resolveLocalLlmModel(model, options?.authorization);
+    const openAiApiKey = resolveOpenAiApiKey(options?.authorization);
     let systemPrompt: string;
     let userPrompt: string;
 
@@ -123,7 +121,7 @@ Return only the enhanced prompt text, no introductory phrases.`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: llmModel,

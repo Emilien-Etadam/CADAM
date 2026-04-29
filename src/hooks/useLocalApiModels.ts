@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getApiBaseUrl } from '@/lib/localBackend';
+import { getApiBaseUrl, getLocalOpenAiAuthHeaders } from '@/lib/localBackend';
+import { getPersistedOpenAiApiKey } from '@/lib/localLlmSettings';
 import type { LocalApiModelsPayload } from '@/lib/localLlmModelConfigs';
 
 /**
@@ -7,14 +8,21 @@ import type { LocalApiModelsPayload } from '@/lib/localLlmModelConfigs';
  * lors d’un changement d’hôte (réglage utilisateur).
  */
 export function getLocalApiModelsQueryKey() {
-  return ['api', 'models', getApiBaseUrl()] as const;
+  return [
+    'api',
+    'models',
+    getApiBaseUrl(),
+    getPersistedOpenAiApiKey() ?? '',
+  ] as const;
 }
 
 export function useLocalApiModels() {
   return useQuery({
     queryKey: getLocalApiModelsQueryKey(),
     queryFn: async () => {
-      const r = await fetch(`${getApiBaseUrl()}/api/models`);
+      const r = await fetch(`${getApiBaseUrl()}/api/models`, {
+        headers: getLocalOpenAiAuthHeaders(),
+      });
       if (!r.ok) {
         throw new Error('models');
       }

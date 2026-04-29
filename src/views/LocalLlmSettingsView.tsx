@@ -13,14 +13,16 @@ import { parametricModelConfigsFromApi } from '@/lib/localLlmModelConfigs';
 import {
   getPersistedApiBaseUrlOverride,
   getPersistedLocalLlmModelId,
+  getPersistedOpenAiApiKey,
   setPersistedApiBaseUrlOverride,
   setPersistedLocalLlmModelId,
+  setPersistedOpenAiApiKey,
 } from '@/lib/localLlmSettings';
 import type { Model } from '@shared/types';
 import { cn } from '@/lib/utils';
 
 /**
- * Réglages locaux du LLM (URL d’API, modèle par défaut, disponibilité).
+ * Réglages locaux du LLM (URL d’API, clé API, modèle par défaut, disponibilité).
  * Réutilise useLocalApiModels et la persistance sans logique parallèle.
  */
 export function LocalLlmSettingsView() {
@@ -35,6 +37,9 @@ export function LocalLlmSettingsView() {
 
   const [baseInput, setBaseInput] = useState(() => {
     return getPersistedApiBaseUrlOverride() ?? '';
+  });
+  const [apiKeyInput, setApiKeyInput] = useState(() => {
+    return getPersistedOpenAiApiKey() ?? '';
   });
   const [model, setModel] = useState<Model>(
     () => getPersistedLocalLlmModelId() ?? '',
@@ -61,6 +66,12 @@ export function LocalLlmSettingsView() {
     void refetch();
   }, [baseInput, queryClient, refetch]);
 
+  const handleSaveApiKey = useCallback(() => {
+    setPersistedOpenAiApiKey(apiKeyInput);
+    void queryClient.invalidateQueries({ queryKey: ['api', 'models'] });
+    void refetch();
+  }, [apiKeyInput, queryClient, refetch]);
+
   const setModelWithPersist = useCallback((m: Model) => {
     setPersistedLocalLlmModelId(m);
     setModel(m);
@@ -76,8 +87,8 @@ export function LocalLlmSettingsView() {
       <div>
         <h1 className="text-xl font-semibold">Local LLM</h1>
         <p className="mt-1 text-sm text-adam-text-tertiary">
-          Configuration stockée dans ce navigateur (base d’API et modèle par
-          défaut pour le mode paramétrique).
+          Configuration stockée dans ce navigateur (URL du backend, clé API vers
+          vLLM si besoin, modèle par défaut pour le mode paramétrique).
         </p>
       </div>
 
@@ -107,6 +118,35 @@ export function LocalLlmSettingsView() {
         </p>
         <Button type="button" variant="secondary" onClick={handleSaveBaseUrl}>
           Enregistrer l’URL
+        </Button>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <Label htmlFor="local-openai-api-key">
+          Clé API (OpenAI-compatible)
+        </Label>
+        <p className="text-xs text-adam-text-tertiary">
+          Optionnel. Envoyée au serveur local dans l’en-tête{' '}
+          <code className="rounded bg-adam-neutral-900 px-1">
+            Authorization
+          </code>{' '}
+          pour authentifier les appels vers vLLM ; si vide, le serveur utilise{' '}
+          <code className="rounded bg-adam-neutral-900 px-1">
+            OPENAI_API_KEY
+          </code>{' '}
+          sur la machine.
+        </p>
+        <Input
+          id="local-openai-api-key"
+          type="password"
+          placeholder="(variable d’environnement du serveur)"
+          autoComplete="off"
+          value={apiKeyInput}
+          onChange={(e) => setApiKeyInput(e.target.value)}
+          className="bg-adam-bg-secondary-dark"
+        />
+        <Button type="button" variant="secondary" onClick={handleSaveApiKey}>
+          Enregistrer la clé API
         </Button>
       </section>
 

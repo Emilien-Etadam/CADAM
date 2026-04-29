@@ -18,14 +18,11 @@ import {
 } from './db.js';
 import {
   CHAT_COMPLETIONS_URL,
-  OPENAI_API_KEY,
   resolveLocalLlmModel,
+  resolveOpenAiApiKey,
 } from './lib/localOpenAiModel.js';
 
-const MAX_TOKENS_CAP = parseInt(
-  process.env.MAX_TOKENS_CAP ?? '4096',
-  10,
-);
+const MAX_TOKENS_CAP = parseInt(process.env.MAX_TOKENS_CAP ?? '4096', 10);
 
 function capMax(requested: number): number {
   return Math.min(requested, MAX_TOKENS_CAP);
@@ -197,6 +194,7 @@ interface ChatCompletionsRequest {
 async function generateTitleFromMessages(
   messagesToSend: OpenAIMessage[],
   llmModel: string,
+  openAiApiKey: string,
 ): Promise<string> {
   try {
     const titleSystemPrompt = `Generate a short title for a 3D object. Rules:
@@ -210,7 +208,7 @@ async function generateTitleFromMessages(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: llmModel,
@@ -416,6 +414,7 @@ module torus(r1, r2) {
 
 export async function handleParametricChatRequest(
   body: Record<string, unknown>,
+  options?: { authorization?: string | null },
 ): Promise<Response> {
   const userData = { user: { id: devUser().id, email: devUser().email } };
 
@@ -436,7 +435,8 @@ export async function handleParametricChatRequest(
     newMessageId: string;
   };
 
-  const llmModel = await resolveLocalLlmModel(model);
+  const openAiApiKey = resolveOpenAiApiKey(options?.authorization);
+  const llmModel = await resolveLocalLlmModel(model, options?.authorization);
 
   let list: Message[];
   try {
@@ -461,16 +461,14 @@ export async function handleParametricChatRequest(
 
   // Insert placeholder assistant message that we will stream updates into
   let content: Content = { model: llmModel };
-  const newMessageData = await insertAssistantPlaceholder(
-    {
-      id: newMessageId,
-      conversation_id: conversationId,
-      user_id: userData.user.id,
-      role: 'assistant',
-      content,
-      parent_message_id: messageId,
-    },
-  );
+  const newMessageData = await insertAssistantPlaceholder({
+    id: newMessageId,
+    conversation_id: conversationId,
+    user_id: userData.user.id,
+    role: 'assistant',
+    content,
+    parent_message_id: messageId,
+  });
   if (!newMessageData) {
     return new Response(
       JSON.stringify({
@@ -562,7 +560,7 @@ export async function handleParametricChatRequest(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -736,6 +734,7 @@ export async function handleParametricChatRequest(
               const title = await generateTitleFromMessages(
                 messagesToSend,
                 llmModel,
+                openAiApiKey,
               );
 
               // Remove the code from the text (keep any non-code explanation)
@@ -862,6 +861,7 @@ export async function handleParametricChatRequest(
             const titlePromise = generateTitleFromMessages(
               messagesToSend,
               llmModel,
+              openAiApiKey,
             );
 
             let rawCode = '';
@@ -879,7 +879,7 @@ export async function handleParametricChatRequest(
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  Authorization: `Bearer ${OPENAI_API_KEY}`,
+                  Authorization: `Bearer ${openAiApiKey}`,
                 },
                 body: JSON.stringify(codeRequestBody),
               });
@@ -1114,7 +1114,10 @@ export async function handleParametricChatRequest(
 
     let updatedMessageData: Message | null = null;
     try {
-      updatedMessageData = await updateMessageContent(newMessageData.id, content);
+      updatedMessageData = await updateMessageContent(
+        newMessageData.id,
+        content,
+      );
     } catch (e) {
       console.error(e);
     }
